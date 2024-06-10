@@ -58,7 +58,7 @@ jobs:
           CXX_STANDARD: ${{matrix.cxx_standard}}
           RUNTIME: ${{matrix.runtime}}
         run: |
-          mkdir -p local_build
+          New-Item -Path "./" -Name local_build -ItemType "directory"
 
           conan install ./conanfile.txt  \
           -s build_type=${BUILD_TYPE}  \
