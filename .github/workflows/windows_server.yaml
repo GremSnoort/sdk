@@ -44,11 +44,12 @@ jobs:
           cmake --version
           ninja --version
           Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
+          $Env:VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
           cd "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\"
           #./vcvars64.bat
-          cmd.exe /c "call vcvars64.bat' && set > .\vcvars.txt"
-          Get-ChildItem -path
+          cmd.exe /c "call vcvars64.bat && set > .\vcvars.txt"
+          Get-ChildItem -path .
           #Get-Content "./vcvars.txt" | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
           cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
