@@ -61,15 +61,15 @@ jobs:
           New-Item -Path "./" -Name local_build -ItemType "directory"
           Get-ChildItem -path .
 
-          conan install ./conanfile.txt  \
-          -s build_type=${BUILD_TYPE}  \
-          --output-folder=local_build \
-          --install-folder=local_build \
-          --generator CMakeToolchain \
-          --build=missing \
-          -c:b tools.cmake.cmaketoolchain:generator=Ninja \
-          -c:h tools.cmake.cmaketoolchain:generator=Ninja \
-          -s compiler.runtime=${RUNTIME}
+          conan install ./conanfile.txt \
+            -s build_type=${BUILD_TYPE} \
+            --output-folder=local_build \
+            --install-folder=local_build \
+            --generator CMakeToolchain \
+            --build=missing \
+            -c:b tools.cmake.cmaketoolchain:generator=Ninja \
+            -c:h tools.cmake.cmaketoolchain:generator=Ninja \
+            -s compiler.runtime=${RUNTIME}
 
           cmake -B local_build -GNinja \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
