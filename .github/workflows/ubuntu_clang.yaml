@@ -16,8 +16,8 @@ jobs:
           {"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"17"},
           #{"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"18"},
 
-          {"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"17"},
-          {"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"18"}
+          {"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"17"}
+          #{"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"18"}
         ]
 
     runs-on: ubuntu-latest

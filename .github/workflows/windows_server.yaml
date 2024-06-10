@@ -43,7 +43,8 @@ jobs:
           python3 --version
           cmake --version
           ninja --version
-          cl
+          Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
+#          cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
           #
           #apt-get install -y \
