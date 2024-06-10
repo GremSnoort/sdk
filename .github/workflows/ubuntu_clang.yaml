@@ -1,5 +1,5 @@
 name: Clang Builds
-#on: [push]
+on: [push]
 
 jobs:
   build:
