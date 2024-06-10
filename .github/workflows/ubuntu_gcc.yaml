@@ -51,7 +51,7 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          #add-apt-repository ppa:ubuntu-toolchain-r/test
+          add-apt-repository ppa:ubuntu-toolchain-r/test
 
           apt-get install -y \
             software-properties-common ca-certificates \
@@ -60,7 +60,7 @@ jobs:
             zlib1g-dev wget
 
           #python3 -m pip install --upgrade pip
-          python3 -m pip install --no-cache-dir --user conan==1.63 cmake
+          python3 -m pip install --no-cache-dir --user --break-system-packages conan==1.63 cmake
 
       - name: Install compiler
         run: |
