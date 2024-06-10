@@ -44,7 +44,6 @@ jobs:
           TOOLCHAIN_VERSION: ${{matrix.configuration.TOOLCHAIN_VERSION}}
         run: |
           New-Item -Path "./" -Name local_build -ItemType "directory"
-          Get-ChildItem -path .
 
           conan profile new default --detect --force
           conan profile update settings.os=Windows default
