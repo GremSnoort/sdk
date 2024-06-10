@@ -62,8 +62,7 @@ jobs:
           Get-ChildItem -path .
 
           conan install ./conanfile.txt \
-            -s build_type=$Env:BUILD_TYPE --output-folder=local_build \
-            --install-folder=local_build \
+            -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build \
             --generator CMakeToolchain \
             --build=missing \
             -c:b tools.cmake.cmaketoolchain:generator=Ninja \
