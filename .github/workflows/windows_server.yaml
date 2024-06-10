@@ -48,6 +48,14 @@ jobs:
           Get-ChildItem -path .
 
           conan profile new default --detect --force
+          conan profile update settings.os=Windows default
+          conan profile update settings.os_build=Windows default
+          conan profile update settings.arch=x86_64 default
+          conan profile update settings.arch_build=x86_64 default
+          conan profile update settings.compiler="Visual Studio" default
+          conan profile update settings.compiler.runtime=$Env:RUNTIME default
+          conan profile update settings.build_type=$Env:BUILD_TYPE default
+          conan profile update env.CXX=cl default
           conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s compiler.runtime=$Env:RUNTIME
 
           cmake -B local_build -GNinja -DCMAKE_BUILD_TYPE=$Env:BUILD_TYPE -DCMAKE_CXX_STANDARD=$Env:CXX_STANDARD -DCMAKE_CXX_COMPILER=$Env:CXX -DCMAKE_TOOLCHAIN_FILE=local_build/build/${BUILD_TYPE}/generators/conan_toolchain.cmake -DRUNTIME=$Env:RUNTIME
