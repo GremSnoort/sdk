@@ -35,6 +35,8 @@ jobs:
           cl
           python3 -m pip install --no-cache-dir --break-system-packages conan==1.63
           conan --version
+
+          Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
 #
       - name: Configure CMake
         env:
