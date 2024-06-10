@@ -52,7 +52,11 @@ jobs:
         run: |
           add-apt-repository ppa:ubuntu-toolchain-r/test
 
-          bash ./build/gcc/pyinstall.sh $(cat /etc/os-release | grep -a UBUNTU_CODENAME | sed -e 's/UBUNTU_CODENAME=//g')
+          apt-get install -y \
+            software-properties-common ca-certificates \
+            ninja-build make \
+            python3.12-pip python3.12 python3.12-dev python3.12-setuptools \
+            zlib1g-dev wget
 
           python3 -m pip install --upgrade pip
           python3 -m pip install --no-cache-dir conan==1.63 cmake
