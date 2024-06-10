@@ -55,11 +55,10 @@ jobs:
           apt-get install -y \
             software-properties-common ca-certificates \
             ninja-build make \
-            python3.12 python3-pip \
             zlib1g-dev wget
 
-          python3.12 -m pip install --upgrade pip
-          python3.12 -m pip install --no-cache-dir conan==1.63 cmake
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --no-cache-dir conan==1.63 cmake
 
       - name: Install compiler
         run: |
