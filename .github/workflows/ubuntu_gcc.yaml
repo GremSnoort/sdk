@@ -47,21 +47,23 @@ jobs:
 #      - uses: actions/setup-python@v5
 #        with:
 #          python-version: '3.12'
-
-      # https://github.com/marketplace/actions/get-conan
-      - name: Install Conan
-        id: conan
-        uses: turtlebrowser/get-conan@main
-        with:
-          version: 1.63.0
+#
+#      # https://github.com/marketplace/actions/get-conan
+#      - name: Install Conan
+#        id: conan
+#        uses: turtlebrowser/get-conan@main
+#        with:
+#          version: 1.63.0
 
       - uses: lukka/get-cmake@latest  # <--= Just this one-liner suffices.
 
-#      - name: Install system dependencies after checkout
-#        env:
-#          DEBIAN_FRONTEND: noninteractive
-#        run: |
-#          add-apt-repository ppa:ubuntu-toolchain-r/test
+      - name: Install system dependencies after checkout
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          add-apt-repository ppa:ubuntu-toolchain-r/test
+
+          python3 -m pip install --no-cache-dir --user --break-system-packages conan==1.63
 #
 #          apt-get install -y \
 #            software-properties-common ca-certificates \
