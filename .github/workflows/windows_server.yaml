@@ -17,20 +17,6 @@ jobs:
     runs-on: windows-${{matrix.configuration.WINDOWS_VERSION}}
 
     steps:
-#      - name: Install system dependencies before checkout
-#        env:
-#          DEBIAN_FRONTEND: noninteractive
-#        run: |
-#          apt update
-#          apt-get install -y \
-#            software-properties-common ca-certificates \
-#            ninja-build make \
-#            zlib1g-dev wget
-#
-#          add-apt-repository ppa:git-core/ppa
-#          apt update && apt install -y git
-#          git --version
-
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -52,7 +38,7 @@ jobs:
 #
       - name: Configure CMake
         env:
-          CC: 
+          CC: cl
           CXX: cl
           BUILD_TYPE: ${{matrix.build_type}}
           CXX_STANDARD: ${{matrix.cxx_standard}}
