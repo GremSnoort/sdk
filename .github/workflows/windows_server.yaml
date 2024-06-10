@@ -59,6 +59,7 @@ jobs:
           RUNTIME: ${{matrix.runtime}}
         run: |
           New-Item -Path "./" -Name local_build -ItemType "directory"
+          Get-ChildItem -path .
 
           conan install ./conanfile.txt  \
           -s build_type=${BUILD_TYPE}  \
