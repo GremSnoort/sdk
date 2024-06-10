@@ -44,7 +44,7 @@ jobs:
           cmake --version
           ninja --version
           Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
-          Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
+          Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
 #          cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
           #
