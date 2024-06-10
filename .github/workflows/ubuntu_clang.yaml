@@ -33,18 +33,28 @@ jobs:
           apt-get install -y \
             software-properties-common ca-certificates \
             ninja-build make \
-            python3-full python3-pip \
             zlib1g-dev wget
-
-          add-apt-repository ppa:ubuntu-toolchain-r/test
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --no-cache-dir --user conan==1.63 cmake
 
           add-apt-repository ppa:git-core/ppa
           apt update && apt install -y git
           git --version
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+  
+      - name: Install system dependencies after checkout
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          add-apt-repository ppa:ubuntu-toolchain-r/test
+
+          apt-get install -y \
+            software-properties-common ca-certificates \
+            ninja-build make \
+            zlib1g-dev wget
+
+          #python3 -m pip install --upgrade pip
+          python -m pip install --no-cache-dir --user conan==1.63 cmake
 
       - name: Install compiler
         run: |
