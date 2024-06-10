@@ -55,7 +55,7 @@ jobs:
           apt-get install -y \
             software-properties-common ca-certificates \
             ninja-build make \
-            python3.12 python3.12-dev \
+            python3.12 \
             zlib1g-dev wget
 
           python3.12 -m pip install --upgrade pip
