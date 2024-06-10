@@ -33,7 +33,7 @@ jobs:
           apt-get install -y \
             software-properties-common ca-certificates \
             ninja-build make \
-            python3-pip \
+            python3-full \
             zlib1g-dev wget
 
           add-apt-repository ppa:ubuntu-toolchain-r/test
