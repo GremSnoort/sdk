@@ -15,9 +15,7 @@ jobs:
           {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"13"}
         ]
 
-    runs-on: windows-latest
-    container:
-      image: windows-${{matrix.configuration.WINDOWS_VERSION}}
+    runs-on: windows-${{matrix.configuration.WINDOWS_VERSION}}
 
     steps:
 #      - name: Install system dependencies before checkout

@@ -53,9 +53,10 @@ jobs:
         run: |
           #add-apt-repository ppa:ubuntu-toolchain-r/test
 
-          apt-get install -y
-            software-properties-common ca-certificates
-            ninja-build make
+          apt-get install -y \
+            software-properties-common ca-certificates \
+            ninja-build make \
+            python3-pip \
             zlib1g-dev wget
 
           #python3 -m pip install --upgrade pip
