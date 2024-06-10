@@ -61,7 +61,7 @@
 //#include "log.h"
 //#include "string_util.h"
 
-namespace sdk::benchmark {
+namespace gremsnoort::sdk::benchmark {
 
 // Suppress unused warnings on helper functions.
 #if defined(__GNUC__)

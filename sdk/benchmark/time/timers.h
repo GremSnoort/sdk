@@ -4,7 +4,7 @@
 #include <chrono>
 #include <string>
 
-namespace sdk::benchmark {
+namespace gremsnoort::sdk::benchmark {
 
 // Return the CPU usage of the current process
 double ProcessCPUUsage();

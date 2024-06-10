@@ -4,7 +4,7 @@
 //#include "check.h"
 #include <sdk/benchmark/time/timers.h>
 
-namespace sdk::benchmark {
+namespace gremsnoort::sdk::benchmark {
 
 class ThreadTimer {
   explicit ThreadTimer(bool measure_process_cpu_time_)
