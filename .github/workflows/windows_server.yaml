@@ -7,12 +7,11 @@ jobs:
       fail-fast: false
       matrix:
         runtime: ["MD"]
-        vs_version: [17]
         cxx_standard: [23]
         build_type: ["Release", "Debug"]
         configuration: [
-          #{"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"13"},
-          {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"13"}
+          #{"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"17"},
+          {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"17"}
         ]
 
     runs-on: windows-${{matrix.configuration.WINDOWS_VERSION}}
@@ -46,7 +45,7 @@ jobs:
           BUILD_TYPE: ${{matrix.build_type}}
           CXX_STANDARD: ${{matrix.cxx_standard}}
           RUNTIME: ${{matrix.runtime}}
-          VS_VERSION: ${{matrix.vs_version}}
+          TOOLCHAIN_VERSION: ${{matrix.configuration.TOOLCHAIN_VERSION}}
         run: |
           New-Item -Path "./" -Name local_build -ItemType "directory"
           Get-ChildItem -path .
@@ -57,12 +56,11 @@ jobs:
           conan profile update settings.arch=x86_64 default
           conan profile update settings.arch_build=x86_64 default
           conan profile update settings.compiler="Visual Studio" default
-          conan profile update settings.compiler.version=$Env:VS_VERSION default
+          conan profile update settings.compiler.version=$Env:TOOLCHAIN_VERSION default
           conan profile update settings.compiler.runtime=$Env:RUNTIME default
           conan profile update settings.build_type=$Env:BUILD_TYPE default
           conan profile update env.CXX=cl default
           conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s compiler.runtime=$Env:RUNTIME
-
           cmake -B local_build -GNinja -DCMAKE_BUILD_TYPE=$Env:BUILD_TYPE -DCMAKE_CXX_STANDARD=$Env:CXX_STANDARD -DCMAKE_CXX_COMPILER=$Env:CXX -DCMAKE_TOOLCHAIN_FILE=local_build/build/${BUILD_TYPE}/generators/conan_toolchain.cmake -DRUNTIME=$Env:RUNTIME
 
       - name: Build
