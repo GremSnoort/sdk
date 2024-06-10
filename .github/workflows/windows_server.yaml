@@ -37,20 +37,23 @@ jobs:
           python-version: '3.12'
 
       - uses: lukka/get-cmake@latest  # <--= Just this one-liner suffices.
+      - uses: TheMrMilchmann/setup-msvc-dev@v3
+        with:
+          arch: x64
 
       - name: Install system dependencies after checkout
         run: |
           python3 --version
           cmake --version
           ninja --version
-          Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
-          $Env:VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
-          #cd "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\"
-          #./vcvars64.bat
-          cmd.exe /c "call $VCVARS && set > .\vcvars.txt"
-          Get-ChildItem -path .
-          Get-Content ./vcvars.txt | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
+          #Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
+          #$Env:VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          #Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
+          ##cd "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\"
+          ##./vcvars64.bat
+          #cmd.exe /c "call $VCVARS && set > .\vcvars.txt"
+          #Get-ChildItem -path .
+          #Get-Content ./vcvars.txt | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
           cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
           #
