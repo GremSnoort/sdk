@@ -37,8 +37,8 @@ jobs:
             zlib1g-dev wget
 
           add-apt-repository ppa:ubuntu-toolchain-r/test
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --no-cache-dir conan==1.63 cmake
+          python3.12 -m pip install --upgrade pip
+          python3.12 -m pip install --no-cache-dir conan==1.63 cmake
 
           add-apt-repository ppa:git-core/ppa
           apt update && apt install -y git

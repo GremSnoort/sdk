@@ -58,8 +58,8 @@ jobs:
             python3.12 python3.12-dev \
             zlib1g-dev wget
 
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --no-cache-dir conan==1.63 cmake
+          python3.12 -m pip install --upgrade pip
+          python3.12 -m pip install --no-cache-dir conan==1.63 cmake
 
       - name: Install compiler
         run: |
