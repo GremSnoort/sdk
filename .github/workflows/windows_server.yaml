@@ -41,74 +41,49 @@ jobs:
         with:
           arch: x64
 
-      - name: Install system dependencies after checkout
+      - name: Check system dependencies after checkout
         run: |
           python3 --version
           cmake --version
           ninja --version
-          #Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
-          #$Env:VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          #Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
-          ##cd "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\"
-          ##./vcvars64.bat
-          #cmd.exe /c "call $VCVARS && set > .\vcvars.txt"
-          #Get-ChildItem -path .
-          #Get-Content ./vcvars.txt | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
           cl
-          #add-apt-repository ppa:ubuntu-toolchain-r/test
-          #
-          #apt-get install -y \
-          #  software-properties-common ca-certificates \
-          #  ninja-build make \
-          #  python3-full python3-pip \
-          #  zlib1g-dev wget
-          #
-          #python3 -m pip install --upgrade pip --break-system-packages
-          #python3 -m pip install --no-cache-dir --break-system-packages --user conan==1.63 cmake
+          python3 -m pip install --no-cache-dir --break-system-packages conan==1.63
+          conan --version
+#
+      - name: Configure CMake
+        env:
+          CC: cl
+          CXX: cl
+          BUILD_TYPE: ${{matrix.build_type}}
+          CXX_STANDARD: ${{matrix.cxx_standard}}
+          RUNTIME: ${{matrix.runtime}}
+        run: |
+          mkdir -p local_build
 
-#      - name: Install compiler
-#        run: |
-#          apt update && apt-get install -y gcc-${{matrix.configuration.TOOLCHAIN_VERSION}} g++-${{matrix.configuration.TOOLCHAIN_VERSION}}
-#          update-alternatives \
-#            --install /usr/bin/gcc gcc /usr/bin/gcc-${{matrix.configuration.TOOLCHAIN_VERSION}} 90 \
-#            --slave /usr/bin/g++ g++ /usr/bin/g++-${{matrix.configuration.TOOLCHAIN_VERSION}} \
-#            --slave /usr/bin/gcov gcov /usr/bin/gcov-${{matrix.configuration.TOOLCHAIN_VERSION}}
-#
-#          update-alternatives --config gcc
-#
-#      - name: Configure CMake
-#        env:
-#          CC: gcc-${{matrix.configuration.TOOLCHAIN_VERSION}}
-#          CXX: g++-${{matrix.configuration.TOOLCHAIN_VERSION}}
-#          BUILD_TYPE: ${{matrix.build_type}}
-#          CXX_STANDARD: ${{matrix.cxx_standard}}
-#          BACKEND: ${{matrix.backend}}
-#        run: |
-#          mkdir -p local_build
-#
-#          conan install ./conanfile.txt  \
-#          -s build_type=${BUILD_TYPE}  \
-#          --output-folder=local_build \
-#          --install-folder=local_build \
-#          --generator CMakeToolchain \
-#          --build=missing \
-#          -c:b tools.cmake.cmaketoolchain:generator=Ninja \
-#          -c:h tools.cmake.cmaketoolchain:generator=Ninja
-#
-#          cmake -B local_build -GNinja \
-#            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-#            -DCMAKE_CXX_STANDARD=${CXX_STANDARD} \
-#            -DCMAKE_C_COMPILER=${CC} \
-#            -DCMAKE_CXX_COMPILER=${CXX} \
-#            -DCMAKE_TOOLCHAIN_FILE=local_build/build/${BUILD_TYPE}/generators/conan_toolchain.cmake \
-#            -DWITH_SANITIZER=OFF
-#
-#      - name: Build
-#        run: cmake --build local_build
-#
-#      - name: Test
-#        working-directory: local_build
-#        run: ctest --rerun-failed --output-on-failure
+          conan install ./conanfile.txt  \
+          -s build_type=${BUILD_TYPE}  \
+          --output-folder=local_build \
+          --install-folder=local_build \
+          --generator CMakeToolchain \
+          --build=missing \
+          -c:b tools.cmake.cmaketoolchain:generator=Ninja \
+          -c:h tools.cmake.cmaketoolchain:generator=Ninja \
+          -s compiler.runtime=${RUNTIME}
+
+          cmake -B local_build -GNinja \
+            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_CXX_STANDARD=${CXX_STANDARD} \
+            -DCMAKE_C_COMPILER=${CC} \
+            -DCMAKE_CXX_COMPILER=${CXX} \
+            -DCMAKE_TOOLCHAIN_FILE=local_build/build/${BUILD_TYPE}/generators/conan_toolchain.cmake \
+            -DRUNTIME=${RUNTIME}
+
+      - name: Build
+        run: cmake --build local_build
+
+      - name: Test
+        working-directory: local_build
+        run: ctest --rerun-failed --output-on-failure
 
 #      - name: Run benchmark
 #        run: |

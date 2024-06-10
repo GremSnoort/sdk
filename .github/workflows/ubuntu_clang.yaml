@@ -77,7 +77,6 @@ jobs:
           CXX: clang++-${{matrix.configuration.TOOLCHAIN_VERSION}}
           BUILD_TYPE: ${{matrix.build_type}}
           CXX_STANDARD: ${{matrix.cxx_standard}}
-          BACKEND: ${{matrix.backend}}
         run: |
           mkdir -p local_build
 
