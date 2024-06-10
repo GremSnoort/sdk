@@ -9,7 +9,7 @@ jobs:
         runtime: ["MD"]
         build_type: ["Release", "Debug"]
         configuration: [
-          #{"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"17"},
+          {"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"16"},
           {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"17"}
         ]
 
@@ -68,44 +68,3 @@ jobs:
       - name: Test
         working-directory: local_build
         run: ctest --rerun-failed --output-on-failure
-
-#      - name: Run benchmark
-#        run: |
-#          ls -la local_build/
-#          cd local_build/benchmarks
-#          ./benchmark_process --benchmark_format=json | tee benchmark_process_result.json
-#          ./benchmark_serialize --benchmark_format=json | tee benchmark_serialize_result.json
-#          ./benchmark_parse --benchmark_format=json | tee benchmark_parse_result.json
-#          cd ../../ && echo ${PWD}
-#          git config --global --add safe.directory ${PWD}
-#          cat ~/.gitconfig
-#
-#      - name: Store benchmark_process result
-#        uses: benchmark-action/github-action-benchmark@v1
-#        with:
-#          name: 'Benchmark Serialize&Parse gcc-${{matrix.configuration.TOOLCHAIN_VERSION}} ${{matrix.configuration.UBUNTU_VERSION}} ${{matrix.build_type}} c++-${{matrix.cxx_standard}} Backend ${{matrix.backend}}'
-#          tool: 'googlecpp'
-#          output-file-path: local_build/benchmarks/benchmark_process_result.json
-#          benchmark-data-dir-path: dev/bench/gcc_${{matrix.configuration.UBUNTU_VERSION}}_${{matrix.configuration.TOOLCHAIN_VERSION}}_${{matrix.build_type}}_${{matrix.cxx_standard}}_${{matrix.backend}}/process
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          auto-push: true
-#
-#      - name: Store benchmark_serialize result
-#        uses: benchmark-action/github-action-benchmark@v1
-#        with:
-#          name: 'Benchmark Serialize gcc-${{matrix.configuration.TOOLCHAIN_VERSION}} ${{matrix.configuration.UBUNTU_VERSION}} ${{matrix.build_type}} c++-${{matrix.cxx_standard}} Backend ${{matrix.backend}}'
-#          tool: 'googlecpp'
-#          output-file-path: local_build/benchmarks/benchmark_serialize_result.json
-#          benchmark-data-dir-path: dev/bench/gcc_${{matrix.configuration.UBUNTU_VERSION}}_${{matrix.configuration.TOOLCHAIN_VERSION}}_${{matrix.build_type}}_${{matrix.cxx_standard}}_${{matrix.backend}}/serialize
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          auto-push: true
-#
-#      - name: Store benchmark_parse result
-#        uses: benchmark-action/github-action-benchmark@v1
-#        with:
-#          name: 'Benchmark Parse gcc-${{matrix.configuration.TOOLCHAIN_VERSION}} ${{matrix.configuration.UBUNTU_VERSION}} ${{matrix.build_type}} c++-${{matrix.cxx_standard}} Backend ${{matrix.backend}}'
-#          tool: 'googlecpp'
-#          output-file-path: local_build/benchmarks/benchmark_parse_result.json
-#          benchmark-data-dir-path: dev/bench/gcc_${{matrix.configuration.UBUNTU_VERSION}}_${{matrix.configuration.TOOLCHAIN_VERSION}}_${{matrix.build_type}}_${{matrix.cxx_standard}}_${{matrix.backend}}/parse
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          auto-push: true
