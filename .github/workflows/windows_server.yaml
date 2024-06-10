@@ -1,5 +1,5 @@
 name: WindowsServer Builds
-on: [push]
+#on: [push]
 
 jobs:
   build:
