@@ -27,7 +27,7 @@ jobs:
 
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:${{matrix.configuration.UBUNTU_VERSION}}
+      image: ubuntu-${{matrix.configuration.UBUNTU_VERSION}}
 
     steps:
       - name: Install system dependencies before checkout
@@ -59,7 +59,7 @@ jobs:
             zlib1g-dev wget
 
           python3 -m pip install --upgrade pip
-          python3 -m pip install --no-cache-dir --break-system-packages --user conan==1.63 cmake
+          python3 -m pip install --no-cache-dir --user conan==1.63 cmake
 
       - name: Install compiler
         run: |
