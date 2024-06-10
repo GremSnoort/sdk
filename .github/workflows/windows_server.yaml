@@ -45,7 +45,9 @@ jobs:
           ninja --version
           Get-ChildItem -path $Env:VCPKG_INSTALLATION_ROOT
           Get-ChildItem -path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
-#          cl
+          cmd.exe /c "call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" && set > .\vcvars.txt"
+          Get-Content "./vcvars.txt" | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
+          cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
           #
           #apt-get install -y \
