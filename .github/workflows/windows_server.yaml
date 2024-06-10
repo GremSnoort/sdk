@@ -50,7 +50,7 @@ jobs:
           #./vcvars64.bat
           cmd.exe /c "call vcvars64.bat && set > .\vcvars.txt"
           Get-ChildItem -path .
-          #Get-Content "./vcvars.txt" | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
+          Get-Content ./vcvars.txt | Foreach-Object { if ($_ -match "^(.*?)=(.*)$") { Set-Content "env:\$($matches[1])" $matches[2] } }
           cl
           #add-apt-repository ppa:ubuntu-toolchain-r/test
           #
