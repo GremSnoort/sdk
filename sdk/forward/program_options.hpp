@@ -30,7 +30,7 @@ namespace gremsnoort::sdk {
         template<class T>
         auto retrieve_opt(T& output, const char* name, const char* info, auto&& result, bool is_necessary = true) {
             if (result.count(name)) {
-                output = result[name].as<T>();
+                output = result[name].template as<T>();
                 return true;
             }
             else {
