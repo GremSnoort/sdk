@@ -22,7 +22,7 @@ jobs:
 
     runs-on: ubuntu-latest
     container:
-      image: ubuntu-${{matrix.configuration.UBUNTU_VERSION}}
+      image: ubuntu:${{matrix.configuration.UBUNTU_VERSION}}
 
     steps:
       - name: Install system dependencies before checkout
