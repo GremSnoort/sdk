@@ -51,7 +51,7 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          add-apt-repository ppa:ubuntu-toolchain-r/test
+          #add-apt-repository ppa:ubuntu-toolchain-r/test
 
           apt-get install -y \
             software-properties-common ca-certificates \
