@@ -1,6 +1,10 @@
 # sdk
 SDK Components
 
+![GCC builds](https://github.com/GremSnoort/sdk/actions/workflows/ubuntu_gcc.yaml/badge.svg)
+![Clang builds](https://github.com/GremSnoort/sdk/actions/workflows/ubuntu_clang.yaml/badge.svg)
+![WindowsServer builds](https://github.com/GremSnoort/sdk/actions/workflows/windows_server.yaml/badge.svg)
+
 ## Build
 
 ### Windows MSVC
