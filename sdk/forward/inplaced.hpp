@@ -6,7 +6,7 @@
 #include <type_traits>
 #include <atomic>
 
-namespace sdk {
+namespace gremsnoort::sdk {
 
 	template<class Item>
 	class inplaced_t final {
