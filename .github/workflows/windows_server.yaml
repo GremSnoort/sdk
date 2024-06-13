@@ -6,8 +6,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: ["MD"]
-        build_type: ["Release", "Debug"]
+        build_type: [
+            {"BUILD_TYPE":"Release", "RUNTIME":"MD"},
+            {"BUILD_TYPE":"Debug",   "RUNTIME":"MDd"}
+        ]
         configuration: [
           {"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"16"},
           {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"17"}
@@ -17,6 +19,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+#          set-safe-directory: ''
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -39,8 +45,8 @@ jobs:
         env:
           CC: cl
           CXX: cl
-          BUILD_TYPE: ${{matrix.build_type}}
-          RUNTIME: ${{matrix.runtime}}
+          BUILD_TYPE: ${{matrix.build_type.BUILD_TYPE}}
+          RUNTIME: ${{matrix.build_type.RUNTIME}}
           TOOLCHAIN_VERSION: ${{matrix.configuration.TOOLCHAIN_VERSION}}
         run: |
           New-Item -Path "./" -Name local_build -ItemType "directory"
@@ -55,7 +61,7 @@ jobs:
           conan profile update settings.compiler.runtime=$Env:RUNTIME default
           conan profile update settings.build_type=$Env:BUILD_TYPE default
           conan profile update env.CXX=cl default
-          conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s compiler.runtime=$Env:RUNTIME
+          conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s:b compiler.runtime=$Env:RUNTIME -s:h compiler.runtime=$Env:RUNTIME
           echo CONAN_DONE
           cmake -B local_build -GNinja -DCMAKE_BUILD_TYPE:STRING="$Env:BUILD_TYPE" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=".\local_build\build\$Env:BUILD_TYPE\generators\conan_toolchain.cmake" -DCMAKE_RUNTIME:STRING="$Env:RUNTIME"
 

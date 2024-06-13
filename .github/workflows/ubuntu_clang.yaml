@@ -32,6 +32,7 @@ jobs:
           apt update
           apt-get install -y \
             software-properties-common ca-certificates \
+            ninja-build make \
             zlib1g-dev wget zip
 
           add-apt-repository ppa:git-core/ppa
@@ -39,6 +40,10 @@ jobs:
           git --version
 
       - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+#          set-safe-directory: ''
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -80,8 +85,19 @@ jobs:
         run: |
           mkdir -p local_build
 
-          conan install ./conanfile.txt  \
-          -s build_type=${BUILD_TYPE}  \
+          conan profile new default --detect --force
+          conan profile update settings.arch=x86_64 default
+          conan profile update settings.arch_build=x86_64 default
+          conan profile update settings.compiler=clang default
+          conan profile update settings.compiler.version=${{matrix.configuration.TOOLCHAIN_VERSION}} default
+          conan profile update settings.compiler.libcxx=libc++ default
+          conan profile update settings.build_type=${BUILD_TYPE} default
+          conan profile update env.CXX=${CXX} default
+          conan profile update env.CC=${CC} default
+
+          conan install ./conanfile.txt \
+          -s:b build_type=${BUILD_TYPE} \
+          -s:h build_type=${BUILD_TYPE} \
           --output-folder=local_build \
           --install-folder=local_build \
           --generator CMakeToolchain \
