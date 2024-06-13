@@ -70,6 +70,8 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(STATUS "CMAKE_RUNTIME: " ${CMAKE_RUNTIME})
 endif()
 
+find_package(Catch2 REQUIRED)
+
 # configuration
 #############################################################################################
 # ccahe
@@ -91,4 +93,4 @@ include_directories(${ROOT_PATH})
 include(CTest)
 enable_testing()
 
-add_subdirectory(sdk)
+add_subdirectory(gremsnoort/sdk)
