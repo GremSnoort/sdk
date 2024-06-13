@@ -58,7 +58,7 @@ namespace gremsnoort::sdk {
 		auto add(Args&&... args) -> bool {
 			// call from SINGLE thread only
 			if (offset < capacity_) {
-				auto w = new (ptr + offset) value_type(std::forward<Args&&>(args)...);
+				[[maybe_unused]] auto w = new (ptr + offset) value_type(std::forward<Args&&>(args)...);
 				assert(w);
 				offset++;
 				return true;
