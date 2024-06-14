@@ -60,14 +60,14 @@ namespace gremsnoort::sdk {
 			if (offset < capacity_) {
 				[[maybe_unused]] auto w = new (ptr + offset) value_type(std::forward<Args&&>(args)...);
 				assert(w);
-				offset++;
+				offset.fetch_add(1, std::memory_order_relaxed);
 				return true;
 			}
 			return false;
 		}
 
 		auto size() const {
-			return offset;
+			return offset.load(std::memory_order_relaxed);
 		}
 
 		auto capacity() const {

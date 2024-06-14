@@ -70,6 +70,8 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(STATUS "CMAKE_RUNTIME: " ${CMAKE_RUNTIME})
 endif()
 
+find_package(cxxopts REQUIRED)
+find_package(Boost REQUIRED)
 find_package(Catch2 REQUIRED)
 
 # configuration

@@ -1,4 +1,4 @@
-set(project inplaced_tests)
+set(project source_example)
 
 PROJECT(${project} VERSION "${CMAKE_PROJECT_VERSION}" LANGUAGES CXX)
 
@@ -8,7 +8,7 @@ file(GLOB ${PROJECT_NAME}_INTERNAL_HEADERS
 )
 
 file(GLOB ${PROJECT_NAME}_INTERNAL_SOURCES
-    ./inplaced.cpp
+    ./source.cpp
 )
 
 set(${PROJECT_NAME}_HEADERS
@@ -27,9 +27,6 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    Catch2::Catch2WithMain
+    cxxopts::cxxopts
+    boost::boost
 )
-
-include(CTest)
-include(Catch)
-catch_discover_tests(${PROJECT_NAME})
