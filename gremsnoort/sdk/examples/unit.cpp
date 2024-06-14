@@ -14,8 +14,8 @@ struct options_t {
 };
 
 template<gremsnoort::sdk::Queue Q>
-class unit_impl final : public gremsnoort::sdk::unit_t<Q, gremsnoort::sdk::unit::mode_e::blocking_push> {
-	using base_t = gremsnoort::sdk::unit_t<Q, gremsnoort::sdk::unit::mode_e::blocking_push>;
+class unit_impl final : public gremsnoort::sdk::unit_t<Q> {
+	using base_t = gremsnoort::sdk::unit_t<Q>;
 
 	virtual auto on_start(const std::size_t index) noexcept -> void final {
 		std::printf("%s\n", std::format("{} :: #{} :: STARTED +++", gremsnoort::sdk::get_tid(), index).data());
@@ -34,13 +34,13 @@ class unit_impl final : public gremsnoort::sdk::unit_t<Q, gremsnoort::sdk::unit:
 	}
 
 public:
-	explicit unit_impl(const std::size_t scale_factor, const std::size_t source_sz = 1024)
-		: base_t(scale_factor, source_sz) {}
+	explicit unit_impl(const std::size_t scale_factor, const std::size_t wait_for_ms, const std::size_t source_sz = 1024)
+		: base_t(scale_factor, wait_for_ms, source_sz) {}
 };
 
 template<gremsnoort::sdk::Queue Q>
 auto run(const options_t& opts) {
-	auto unit = unit_impl<Q>(opts.consumers_count, 1024);
+	auto unit = unit_impl<Q>(opts.consumers_count, opts.sleep_on_send / 10, 1024);
 	unit.start();
 
 	auto producer = [&]() {

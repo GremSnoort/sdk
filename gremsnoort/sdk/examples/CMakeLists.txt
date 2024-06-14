@@ -1,4 +1,4 @@
-set(project source_example)
+set(project unit_example)
 
 PROJECT(${project} VERSION "${CMAKE_PROJECT_VERSION}" LANGUAGES CXX)
 
@@ -8,7 +8,7 @@ file(GLOB ${PROJECT_NAME}_INTERNAL_HEADERS
 )
 
 file(GLOB ${PROJECT_NAME}_INTERNAL_SOURCES
-    ./source.cpp
+    ./unit.cpp
 )
 
 set(${PROJECT_NAME}_HEADERS

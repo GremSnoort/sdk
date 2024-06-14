@@ -22,7 +22,6 @@ namespace gremsnoort::sdk {
 	namespace unit {
 	
 		enum class mode_e : int8_t {
-			pure,
 			blocking_push,
 			defaultv = blocking_push
 		};
@@ -36,6 +35,7 @@ namespace gremsnoort::sdk {
 		using inplaced_t = inplaced_t<source_t<Q, Mode == unit::mode_e::blocking_push>>;
 
 		const std::size_t I;
+		const std::size_t wait_for_ms;
 		inplaced_t inputs;
 
 		std::atomic_bool is_running = false;
@@ -54,10 +54,9 @@ namespace gremsnoort::sdk {
 			assert(inputs.check_index(index));
 			auto& input = inputs.at(index);
 			value_type data;
-			using namespace std::chrono_literals;
 			while (is_running.load(std::memory_order_relaxed)) {
 				try {
-					if (input.pop(data, 10ms)) {
+					if (input.pop(data, std::chrono::milliseconds(wait_for_ms))) {
 						on_data(index, data);
 					}
 					else {
@@ -70,8 +69,9 @@ namespace gremsnoort::sdk {
 		}
 
 	public:
-		explicit unit_t(const std::size_t scale_factor, const std::size_t source_sz = 1024)
+		explicit unit_t(const std::size_t scale_factor, const std::size_t wait_for_ms_, const std::size_t source_sz = 1024)
 			: I(scale_factor)
+			, wait_for_ms(wait_for_ms_)
 			, inputs(I)
 		{
 			for (std::size_t i = 0; i < I; ++i) {
