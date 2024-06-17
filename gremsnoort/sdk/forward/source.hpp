@@ -78,9 +78,13 @@ namespace gremsnoort::sdk {
 
         template<class ...Args>
         auto pop(value_type& output, std::chrono::duration<Args...> wait_for = 10) {
-            std::unique_lock _(lock);
-            cv.wait_for(_, (wait_for));
-            return queue.pop(output);
+            auto status = queue.pop(output);
+            if (!status && wait_for.count() > 0) {
+                std::unique_lock _(lock);
+                cv.wait_for(_, (wait_for));
+                status = queue.pop(output);
+            }
+            return status;
         }
     };
 
