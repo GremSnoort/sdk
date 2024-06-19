@@ -117,9 +117,14 @@ namespace gremsnoort::sdk {
 			routines.clear();
 		}
 
+		auto terminate() {
+			if (stop()) {
+				join();
+			}
+		}
+
 		virtual ~unit_t() {
-			stop();
-			join();
+			terminate();
 		}
 
 	};
