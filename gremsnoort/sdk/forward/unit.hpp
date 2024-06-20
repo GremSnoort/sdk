@@ -110,7 +110,7 @@ namespace gremsnoort::sdk {
 						if (cpu_time_used > 0.0 || real_time_used > 0.0)
 							on_overtime_pop(cpu_time_used, real_time_used);
 					} // check time
-					if (auto sz = input.size(); sz > 0) {
+					if (auto sz = input.size(); sz > 20) {
 						on_oversize_source(sz);
 					}
 					if (status) {
