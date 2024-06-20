@@ -29,4 +29,5 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE
     cxxopts::cxxopts
     boost::boost
+    sdk_benchmark_time
 )

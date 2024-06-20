@@ -3,10 +3,11 @@
 
 //#include "check.h"
 #include <gremsnoort/sdk/benchmark/time/timers.h>
+#include <gremsnoort/sdk/forward/factory.hpp>
 
 namespace gremsnoort::sdk::benchmark {
 
-class ThreadTimer {
+class ThreadTimer final : public unique_factory_t<ThreadTimer> {
   explicit ThreadTimer(bool measure_process_cpu_time_)
       : measure_process_cpu_time(measure_process_cpu_time_) {}
 
@@ -77,6 +78,18 @@ class ThreadTimer {
   double cpu_time_used_ = 0;
   // Manually set iteration time. User sets this with SetIterationTime(seconds).
   double manual_time_used_ = 0;
+};
+
+struct time_checker_t final {
+    ThreadTimer& ref;
+
+    explicit time_checker_t(ThreadTimer& timer)
+        : ref(timer) {
+        ref.StartTimer();
+    }
+    ~time_checker_t() {
+        ref.StopTimer();
+    }
 };
 
 }  // namespace sdk::benchmark

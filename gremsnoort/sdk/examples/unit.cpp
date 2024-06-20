@@ -33,9 +33,29 @@ class unit_impl final : public gremsnoort::sdk::unit_t<Q> {
 		std::printf("%s\n", std::format("{} :: #{} :: Data `{}`", gremsnoort::sdk::get_tid(), index, data).data());
 	}
 
+	auto on_overtime_push(
+		const double cpu_time_used/*microseconds*/,
+		const double real_time_used/*microseconds*/) -> void {
+		std::printf("%s\n", std::format("OVERTIME PUSH :: cpu/real : {}/{}", cpu_time_used, real_time_used).data());
+	}
+
+	auto on_overtime_pop(
+		const double cpu_time_used/*microseconds*/,
+		const double real_time_used/*microseconds*/) -> void {
+		std::printf("%s\n", std::format("OVERTIME POP :: cpu/real : {}/{}", cpu_time_used, real_time_used).data());
+	}
+
+	auto on_oversize_source(const std::size_t oversz) -> void {
+		std::printf("%s\n", std::format("OVERSIZE SOURCE :: {}", oversz).data());
+	}
+
 public:
 	explicit unit_impl(const std::size_t scale_factor, const std::size_t wait_for_ms, const std::size_t source_sz = 1024)
-		: base_t(scale_factor, wait_for_ms, source_sz) {}
+		: base_t(scale_factor, wait_for_ms, source_sz) {
+		base_t::on<base_t::event_e::overtime_push>(std::bind(&unit_impl::on_overtime_push, this, std::placeholders::_1, std::placeholders::_2));
+		base_t::on<base_t::event_e::overtime_pop>(std::bind(&unit_impl::on_overtime_pop, this, std::placeholders::_1, std::placeholders::_2));
+		base_t::on<base_t::event_e::oversize_source>(std::bind(&unit_impl::on_oversize_source, this, std::placeholders::_1));
+	}
 };
 
 template<gremsnoort::sdk::Queue Q>
