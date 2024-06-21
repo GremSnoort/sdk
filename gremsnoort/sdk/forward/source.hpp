@@ -97,9 +97,10 @@ namespace gremsnoort::sdk {
             if (!status && wait_for.count() > 0) {
                 std::unique_lock _(lock);
                 cv.wait_for(_, (wait_for));
-                if (status = queue.pop(output); status) {
-                    size_.fetch_sub(1, std::memory_order_relaxed);
-                }
+                status = queue.pop(output);
+            }
+            if (status) {
+                size_.fetch_sub(1, std::memory_order_relaxed);
             }
             return status;
         }
