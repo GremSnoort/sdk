@@ -32,22 +32,7 @@ namespace gremsnoort::sdk {
 
 	template<Queue Q, unit::mode_e Mode = unit::mode_e::defaultv>
 	class unit_t {
-	public:
-		enum class event_e : int8_t {
-			overtime_push,
-			overtime_pop,
-			oversize_source,
 
-			ALL
-		};
-
-		using timestat_t = std::function<void(
-			const double cpu_time_used/*microseconds*/,
-			const double real_time_used/*microseconds*/)>;
-
-		using sizestat_t = std::function<void(const std::size_t)>;
-
-	private:
 		using value_type = typename Q::value_type;
 		using inplaced_t = inplaced_t<source_t<Q, Mode == unit::mode_e::blocking_push>>;
 
@@ -57,26 +42,6 @@ namespace gremsnoort::sdk {
 
 		std::atomic_bool is_running = false;
 		std::vector<std::thread> routines;
-
-		template<event_e E>
-		struct event_traits_t;
-
-		template<>
-		struct event_traits_t<event_e::overtime_push> {
-			using type_t = timestat_t;
-		};
-		template<>
-		struct event_traits_t<event_e::overtime_pop> {
-			using type_t = timestat_t;
-		};
-		template<>
-		struct event_traits_t<event_e::oversize_source> {
-			using type_t = sizestat_t;
-		};
-
-		timestat_t on_overtime_push;
-		timestat_t on_overtime_pop;
-		sizestat_t on_oversize_source;
 
 		static inline auto make_timer() {
 			using namespace ::gremsnoort::sdk::benchmark;
@@ -91,6 +56,16 @@ namespace gremsnoort::sdk {
 		virtual auto on_exception(const std::size_t index, std::exception& ex) noexcept -> void {}
 		virtual auto on_idle(const std::size_t index) -> void {}
 		virtual auto on_data(const std::size_t index, value_type& data) -> void {}
+
+		virtual auto on_overtime_push(
+			const double cpu_time_used/*microseconds*/,
+			const double real_time_used/*microseconds*/) -> void {}
+
+		virtual auto on_overtime_pop(
+			const double cpu_time_used/*microseconds*/,
+			const double real_time_used/*microseconds*/) -> void {}
+
+		virtual auto on_oversize_source(const std::size_t) -> void {}
 
 	private:
 		auto routine(const std::size_t index) {
@@ -133,19 +108,6 @@ namespace gremsnoort::sdk {
 		{
 			for (std::size_t i = 0; i < I; ++i) {
 				inputs.add(source_sz);
-			}
-		}
-
-		template<event_e E>
-		auto on(event_traits_t<E>::type_t f) {
-			if constexpr (E == event_e::overtime_push) {
-				on_overtime_push = std::move(f);
-			}
-			else if constexpr (E == event_e::overtime_pop) {
-				on_overtime_pop = std::move(f);
-			}
-			else if constexpr (E == event_e::oversize_source) {
-				on_oversize_source = std::move(f);
 			}
 		}
 
