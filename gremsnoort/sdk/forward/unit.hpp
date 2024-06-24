@@ -125,9 +125,8 @@ namespace gremsnoort::sdk {
 
 		template<class ...Args,
 			std::enable_if_t<std::is_constructible_v<value_type, Args&&...>, bool> = true>
-		auto produce(Args&&... args) {
+		auto produce_to(const std::size_t index, Args&&... args) {
 			auto status = false;
-			const auto index = time_now<std::chrono::microseconds>() % inputs.size();
 			assert(inputs.check_index(index));
 			if (inputs.check_index(index)) {
 				auto timer = make_timer();
@@ -141,6 +140,13 @@ namespace gremsnoort::sdk {
 				} // check time
 			}
 			return status;
+		}
+
+		template<class ...Args,
+			std::enable_if_t<std::is_constructible_v<value_type, Args&&...>, bool> = true>
+		auto produce(Args&&... args) {
+			const auto index = time_now<std::chrono::microseconds>() % inputs.size();
+			return produce_to(index, std::forward<Args&&>(args)...);
 		}
 
 		auto stop() {
