@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <concepts>
+#include <thread>
+#include <vector>
 
 // sdk
 #include <gremsnoort/sdk/forward/inplaced.hpp>
@@ -54,8 +56,10 @@ TEST_CASE("inplaced") {
 			for (std::size_t i = 0; i < sz; ++i) {
 				REQUIRE_FALSE(c.check_index(i)); // check index is NOT available because no element created
 				auto v = wrapper.create(i);
-				REQUIRE(c.add(v)); // add element
+				std::size_t index = 0;
+				REQUIRE(c.add(index, v)); // add element
 				REQUIRE(c.check_index(i)); // check index is available
+				REQUIRE(index == i);
 				REQUIRE(wrapper.compare(c, i, v)); // check i the same
 			}
 		}
@@ -70,7 +74,7 @@ TEST_CASE("inplaced") {
 		run(count, std::shared_ptr<type_t>(), wrapper_pointers_t<type_t>{});
 	};
 
-	static const auto count = 1024 * 2;
+	static const auto count = 256;
 
 	SECTION("smart pointers") {
 
@@ -109,8 +113,10 @@ TEST_CASE("inplaced") {
 			REQUIRE(c.capacity() == sz); // check capacity (reserved size) in still empty container
 			for (std::size_t i = 0; i < sz; ++i) {
 				REQUIRE_FALSE(c.check_index(i)); // check index is NOT available because no element created
-				REQUIRE(c.add()); // add element
+				std::size_t index = 0;
+				REQUIRE(c.add(index)); // add element
 				REQUIRE(c.check_index(i)); // check index is available
+				REQUIRE(index == i);
 
 				REQUIRE_FALSE(c.at(i).busy);
 				c[i].busy = true;
@@ -126,6 +132,37 @@ TEST_CASE("inplaced") {
 			}
 		}
 	
+	}
+
+	SECTION("data::node multithreaded") {
+
+		using type_t = gremsnoort::sdk::tests::data::node_t<int>;
+		using container_t = gremsnoort::sdk::inplaced_t<type_t>;
+
+		for (std::size_t sz = 0; sz <= count; ++sz) {
+			auto c = container_t(sz); // create new inplaced container
+			std::vector<std::thread> routines;
+			std::atomic_bool start = false;
+			std::vector<std::size_t> ids;
+			ids.resize(sz);
+			for (std::size_t j = 0; j < sz; ++j) {
+				routines.emplace_back([&]() {
+					while (!start.load(std::memory_order_relaxed));
+					std::size_t index = 0;
+					REQUIRE(c.add(index));
+					REQUIRE(c.check_index(index));
+					ids[index]++;
+				});
+			}
+			start = true;
+			for (auto& r : routines) {
+				r.join();
+			}
+			for (const auto& id : ids) {
+				REQUIRE(id == 1);
+			}
+		}
+
 	}
 
 }

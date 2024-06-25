@@ -42,7 +42,7 @@ namespace gremsnoort::sdk {
         && (internal::__Pusheable<Q, typename Q::value_type> || internal::__PushInPlaceable<Q>)
         && internal::__Popable<Q, typename Q::value_type>;
 
-    template<Queue Q, bool blocking = false>
+    template<Queue Q, bool blocking = true>
     class source_t {
         Q queue;
         std::atomic_int64_t size_ = 0;

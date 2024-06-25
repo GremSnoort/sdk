@@ -89,7 +89,9 @@ jobs:
           --generator CMakeToolchain \
           --build=missing \
           -c:b tools.cmake.cmaketoolchain:generator=Ninja \
-          -c:h tools.cmake.cmaketoolchain:generator=Ninja
+          -c:h tools.cmake.cmaketoolchain:generator=Ninja \
+          -pr:b default \
+          -pr:h default
 
           cmake -B local_build -GNinja \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \

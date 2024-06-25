@@ -55,14 +55,19 @@ namespace gremsnoort::sdk {
 
 		template<class ...Args,
 			std::enable_if_t<std::is_constructible_v<value_type, Args...>, bool> = true>
-		auto add(Args&&... args) -> bool {
-			// call from SINGLE thread only
-			if (offset < capacity_) {
-				[[maybe_unused]] auto w = new (ptr + offset) value_type(std::forward<Args&&>(args)...);
-				assert(w);
-				offset.fetch_add(1, std::memory_order_relaxed);
-				return true;
-			}
+		auto add(std::size_t& index_out, Args&&... args) -> bool {
+			std::size_t expected = 0;
+			do {
+				if (expected >= capacity_) {
+					return false;
+				}
+				if (offset.compare_exchange_weak(expected, expected + 1, std::memory_order_relaxed)) {
+					index_out = expected;
+					[[maybe_unused]] auto w = new (ptr + expected) value_type(std::forward<Args&&>(args)...);
+					assert(w);
+					return true;
+				}
+			} while (expected < capacity_);
 			return false;
 		}
 

@@ -61,7 +61,7 @@ jobs:
           conan profile update settings.compiler.runtime=$Env:RUNTIME default
           conan profile update settings.build_type=$Env:BUILD_TYPE default
           conan profile update env.CXX=cl default
-          conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s:b compiler.runtime=$Env:RUNTIME -s:h compiler.runtime=$Env:RUNTIME
+          conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s:b compiler.runtime=$Env:RUNTIME -s:h compiler.runtime=$Env:RUNTIME -pr:b default -pr:h default
           echo CONAN_DONE
           cmake -B local_build -GNinja -DCMAKE_BUILD_TYPE:STRING="$Env:BUILD_TYPE" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=".\local_build\build\$Env:BUILD_TYPE\generators\conan_toolchain.cmake" -DCMAKE_RUNTIME:STRING="$Env:RUNTIME"
 

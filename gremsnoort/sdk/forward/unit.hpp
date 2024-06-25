@@ -106,8 +106,10 @@ namespace gremsnoort::sdk {
 			, wait_for_ms(wait_for_ms_)
 			, inputs(I)
 		{
+			std::size_t index = 0;
 			for (std::size_t i = 0; i < I; ++i) {
-				inputs.add(source_sz);
+				inputs.add(index, source_sz);
+				assert(index == i);
 			}
 		}
 
