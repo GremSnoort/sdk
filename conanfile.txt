@@ -1,0 +1,10 @@
+[requires]
+catch2/3.6.0
+benchmark/1.8.4
+boost/1.85.0
+cxxopts/3.2.0
+[generators]
+CMakeDeps
+CMakeToolchain
+[layout]
+cmake_layout

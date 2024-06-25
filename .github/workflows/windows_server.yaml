@@ -1,0 +1,73 @@
+name: WindowsServer Builds
+on: [push]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [
+            {"BUILD_TYPE":"Release", "RUNTIME":"MD"},
+            {"BUILD_TYPE":"Debug",   "RUNTIME":"MDd"}
+        ]
+        configuration: [
+          {"WINDOWS_VERSION":"2019", "TOOLCHAIN_VERSION":"16"},
+          {"WINDOWS_VERSION":"2022", "TOOLCHAIN_VERSION":"17"}
+        ]
+
+    runs-on: windows-${{matrix.configuration.WINDOWS_VERSION}}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+#          set-safe-directory: ''
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: lukka/get-cmake@latest  # <--= Just this one-liner suffices.
+      - uses: TheMrMilchmann/setup-msvc-dev@v3
+        with:
+          arch: x64
+
+      - name: Check system dependencies after checkout
+        run: |
+          python3 --version
+          cmake --version
+          ninja --version
+          cl
+          python3 -m pip install --no-cache-dir --break-system-packages conan==1.63
+          conan --version
+
+      - name: Configure CMake
+        env:
+          CC: cl
+          CXX: cl
+          BUILD_TYPE: ${{matrix.build_type.BUILD_TYPE}}
+          RUNTIME: ${{matrix.build_type.RUNTIME}}
+          TOOLCHAIN_VERSION: ${{matrix.configuration.TOOLCHAIN_VERSION}}
+        run: |
+          New-Item -Path "./" -Name local_build -ItemType "directory"
+
+          conan profile new default --detect --force
+          conan profile update settings.os=Windows default
+          conan profile update settings.os_build=Windows default
+          conan profile update settings.arch=x86_64 default
+          conan profile update settings.arch_build=x86_64 default
+          conan profile update settings.compiler="Visual Studio" default
+          conan profile update settings.compiler.version=$Env:TOOLCHAIN_VERSION default
+          conan profile update settings.compiler.runtime=$Env:RUNTIME default
+          conan profile update settings.build_type=$Env:BUILD_TYPE default
+          conan profile update env.CXX=cl default
+          conan install ./conanfile.txt -s build_type=$Env:BUILD_TYPE --output-folder=local_build --install-folder=local_build --generator CMakeToolchain --build=missing -c:b tools.cmake.cmaketoolchain:generator=Ninja -c:h tools.cmake.cmaketoolchain:generator=Ninja -s:b compiler.runtime=$Env:RUNTIME -s:h compiler.runtime=$Env:RUNTIME -pr:b default -pr:h default
+          echo CONAN_DONE
+          cmake -B local_build -GNinja -DCMAKE_BUILD_TYPE:STRING="$Env:BUILD_TYPE" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=".\local_build\build\$Env:BUILD_TYPE\generators\conan_toolchain.cmake" -DCMAKE_RUNTIME:STRING="$Env:RUNTIME"
+
+      - name: Build
+        run: cmake --build local_build
+
+      - name: Test
+        working-directory: local_build
+        run: ctest --rerun-failed --output-on-failure

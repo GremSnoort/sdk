@@ -1,0 +1,67 @@
+{
+    "version": 3,
+    "vendor": {
+        "conan": {}
+    },
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 15,
+        "patch": 0
+    },
+  "configurePresets": [
+    {
+      "name": "x64-Debug",
+      "displayName": "'Debug' config",
+      "description": "'Debug' configure using 'Ninja' generator",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_RUNTIME": "MD"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolchainFile": "${sourceDir}\\out\\build\\${presetName}\\build\\Debug\\generators\\conan_toolchain.cmake",
+      "binaryDir": "${sourceDir}\\out\\build\\${presetName}\\build\\Debug"
+    },
+    {
+      "name": "x64-Release",
+      "displayName": "'Release' config",
+      "description": "'Release' configure using 'Ninja' generator",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_RUNTIME": "MD"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolchainFile": "${sourceDir}\\out\\build\\${presetName}\\build\\Release\\generators\\conan_toolchain.cmake",
+      "binaryDir": "${sourceDir}\\out\\build\\${presetName}\\build\\Release"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "x64-Debug",
+      "configurePreset": "x64-Debug"
+    },
+    {
+      "name": "x64-Release",
+      "configurePreset": "x64-Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "x64-Debug",
+      "configurePreset": "x64-Debug"
+    },
+    {
+      "name": "x64-Release",
+      "configurePreset": "x64-Release"
+    }
+  ]
+}

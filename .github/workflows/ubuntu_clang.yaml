@@ -1,0 +1,123 @@
+name: Clang Builds
+on: [push]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx_standard: [23]
+        build_type: ["Release", "Debug"]
+        configuration: [
+          #{"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"13"},
+          #{"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"14"},
+#          {"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"15"},
+          #{"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"16"},
+          {"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"17"},
+          #{"UBUNTU_VERSION":"22.04", "UBUNTU_RELEASE":"jammy", "TOOLCHAIN_VERSION":"18"},
+
+          {"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"17"}
+          #{"UBUNTU_VERSION":"24.04", "UBUNTU_RELEASE":"noble", "TOOLCHAIN_VERSION":"18"}
+        ]
+
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:${{matrix.configuration.UBUNTU_VERSION}}
+
+    steps:
+      - name: Install system dependencies before checkout
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt update
+          apt-get install -y \
+            software-properties-common ca-certificates \
+            ninja-build make \
+            zlib1g-dev wget zip
+
+          add-apt-repository ppa:git-core/ppa
+          apt update && apt install -y git
+          git --version
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+#          set-safe-directory: ''
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: lukka/get-cmake@latest  # <--= Just this one-liner suffices.
+
+      - name: Install system dependencies after checkout
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          add-apt-repository ppa:ubuntu-toolchain-r/test
+
+          python3 -m pip install --no-cache-dir --break-system-packages conan==1.63
+          conan --version
+
+      - name: Install compiler
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+          add-apt-repository "deb http://apt.llvm.org/${{matrix.configuration.UBUNTU_RELEASE}}/ llvm-toolchain-${{matrix.configuration.UBUNTU_RELEASE}}-${{matrix.configuration.TOOLCHAIN_VERSION}} main"
+          wget https://apt.llvm.org/${{matrix.configuration.UBUNTU_RELEASE}}/dists/llvm-toolchain-${{matrix.configuration.UBUNTU_RELEASE}}-${{matrix.configuration.TOOLCHAIN_VERSION}}/main/binary-amd64/Packages
+          cat Packages \
+            | grep -Po "^Package: [a-zA-Z0-9-.\+ ]+$" \
+            | sed -e 's/Package:/ /g' \
+            | sed -e 's/[+\.a-zA-Z0-9-]*wasm[+\.a-zA-Z0-9-]*$/ /g' \
+            | sed -e 's/[+\.a-zA-Z0-9-]*-tools$/ /g' \
+            | sed -e 's/[+\.a-zA-Z0-9-]*polly[+\.a-zA-Z0-9-]*$/ /g' \
+            | sed -e 's/[+\.a-zA-Z0-9-]*python[+\.a-zA-Z0-9-]*$/ /g' \
+            > pkglist
+
+          cat pkglist
+          apt update && apt-get install -y $(cat pkglist)
+
+      - name: Configure CMake
+        env:
+          CC: clang-${{matrix.configuration.TOOLCHAIN_VERSION}}
+          CXX: clang++-${{matrix.configuration.TOOLCHAIN_VERSION}}
+          BUILD_TYPE: ${{matrix.build_type}}
+          CXX_STANDARD: ${{matrix.cxx_standard}}
+        run: |
+          mkdir -p local_build
+
+          conan profile new default --detect --force
+          conan profile update settings.arch=x86_64 default
+          conan profile update settings.arch_build=x86_64 default
+          conan profile update settings.compiler=clang default
+          conan profile update settings.compiler.version=${{matrix.configuration.TOOLCHAIN_VERSION}} default
+          conan profile update settings.compiler.libcxx=libc++ default
+          conan profile update settings.build_type=${BUILD_TYPE} default
+          conan profile update env.CXX=${CXX} default
+          conan profile update env.CC=${CC} default
+
+          conan install ./conanfile.txt \
+          -s:b build_type=${BUILD_TYPE} \
+          -s:h build_type=${BUILD_TYPE} \
+          --output-folder=local_build \
+          --install-folder=local_build \
+          --generator CMakeToolchain \
+          --build=missing \
+          -c:b tools.cmake.cmaketoolchain:generator=Ninja \
+          -c:h tools.cmake.cmaketoolchain:generator=Ninja \
+          -pr:b default \
+          -pr:h default
+
+          cmake -B local_build -GNinja \
+            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_CXX_STANDARD=${CXX_STANDARD} \
+            -DCMAKE_C_COMPILER=${CC} \
+            -DCMAKE_CXX_COMPILER=${CXX} \
+            -DCMAKE_TOOLCHAIN_FILE=local_build/build/${BUILD_TYPE}/generators/conan_toolchain.cmake \
+            -DWITH_SANITIZER=OFF
+
+      - name: Build
+        run: cmake --build local_build
+
+      - name: Test
+        working-directory: local_build
+        run: ctest --rerun-failed --output-on-failure
