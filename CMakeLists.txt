@@ -12,49 +12,65 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(CONAN_EXPERIMENTAL_INCLUDE "CONAN EXPERIMENT INCLUDE" ON)
+# Stable SDK root for subdirectories, including superproject add_subdirectory() usage.
+set(GREMSNOORT_SDK_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+option(WITH_SANITIZER "Enable Address/Leak sanitizer for supported compilers" OFF)
 
 set(CMAKE_VERBOSE_MAKEFILE OFF)
+
+set(GREMSNOORT_COMPILE_OPTIONS)
+set(GREMSNOORT_LINK_OPTIONS)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   # using Clang
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # using GCC
-    if (${WITH_SANITIZER} MATCHES "ON")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=leak -g")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize=leak -g")
-    endif()
-
-    add_compile_options(
-#    -Werror
-    -Wunused
-#    -Wall
-    -Wextra
-    -Wpedantic
-    -Wcast-align
-    -Wcast-qual
-    -Wconversion
-    -Wctor-dtor-privacy
-    -Wenum-compare
-    -Wfloat-equal
-    -Wnon-virtual-dtor
-#    -Wold-style-cast
-    -Woverloaded-virtual
-    -Wredundant-decls
-#    -Wsign-conversion
-    -Wsign-promo
-    -Wno-deprecated
-    -Wno-deprecated-declarations
+    list(APPEND GREMSNOORT_COMPILE_OPTIONS
+    #    -Werror
+        -Wunused
+    #    -Wall
+        -Wextra
+        -Wpedantic
+        -Wcast-align
+        -Wcast-qual
+        -Wconversion
+        -Wctor-dtor-privacy
+        -Wenum-compare
+        -Wfloat-equal
+        -Wnon-virtual-dtor
+    #    -Wold-style-cast
+        -Woverloaded-virtual
+        -Wredundant-decls
+    #    -Wsign-conversion
+        -Wsign-promo
+        -Wno-deprecated
+        -Wno-deprecated-declarations
     )
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+
+    list(APPEND GREMSNOORT_LINK_OPTIONS
+        $<$<CONFIG:Release>:-s>
+    )
+
+    if (WITH_SANITIZER)
+        list(APPEND GREMSNOORT_COMPILE_OPTIONS
+            -fsanitize=address
+            -fsanitize=leak
+            -g
+        )
+        list(APPEND GREMSNOORT_LINK_OPTIONS
+            -fsanitize=address
+            -fsanitize=leak
+            -g
+        )
+    endif()
 
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
   # using Intel C++
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # using Visual Studio C++
-    add_compile_options(
-    /bigobj
+    list(APPEND GREMSNOORT_COMPILE_OPTIONS
+        /bigobj
     )
     if (NOT CMAKE_RUNTIME)
         set(CMAKE_RUNTIME MD) # dynamic/static
@@ -70,9 +86,26 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(STATUS "CMAKE_RUNTIME: " ${CMAKE_RUNTIME})
 endif()
 
+function(gremsnoort_apply_build_options target_name)
+    if (GREMSNOORT_COMPILE_OPTIONS)
+        target_compile_options(${target_name} PRIVATE ${GREMSNOORT_COMPILE_OPTIONS})
+    endif()
+
+    get_target_property(target_type ${target_name} TYPE)
+    if (GREMSNOORT_LINK_OPTIONS AND NOT target_type STREQUAL "STATIC_LIBRARY")
+        target_link_options(${target_name} PRIVATE ${GREMSNOORT_LINK_OPTIONS})
+    endif()
+endfunction()
+
 find_package(cxxopts REQUIRED)
 find_package(Boost REQUIRED)
 find_package(Catch2 REQUIRED)
+find_package(ffmpeg REQUIRED)
+find_package(magic_enum REQUIRED)
+
+if (NOT TARGET ffmpeg::ffmpeg)
+    message(FATAL_ERROR "ffmpeg package found, but target 'ffmpeg::ffmpeg' is missing")
+endif()
 
 # configuration
 #############################################################################################
@@ -88,9 +121,6 @@ endif (CCACHE_FOUND)
 
 # ccahe
 #############################################################################################
-
-get_filename_component(ROOT_PATH "${CMAKE_CURRENT_LIST_DIR}/" ABSOLUTE)
-include_directories(${ROOT_PATH})
 
 include(CTest)
 enable_testing()

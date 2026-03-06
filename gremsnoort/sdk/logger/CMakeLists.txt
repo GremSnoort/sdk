@@ -1,4 +1,4 @@
-set(project sdk_benchmark_time)
+set(project gremsnoort_logger)
 
 file(GLOB ${project}_INTERNAL_HEADERS CONFIGURE_DEPENDS
     ./*.h
@@ -7,7 +7,6 @@ file(GLOB ${project}_INTERNAL_HEADERS CONFIGURE_DEPENDS
 
 file(GLOB ${project}_INTERNAL_SOURCES CONFIGURE_DEPENDS
     ./*.cpp
-    ./*.cc
 )
 
 message(STATUS "TARGET = ${project}")
@@ -22,6 +21,11 @@ target_include_directories(${project} PUBLIC
 )
 
 gremsnoort_apply_build_options(${project})
+
+#target_link_libraries(${project} PRIVATE
+#    fmt::fmt-header-only
+#    spdlog::spdlog_header_only
+#)
 
 #add_subdirectory(example)
 #add_subdirectory(testing)

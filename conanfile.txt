@@ -3,6 +3,8 @@ catch2/3.6.0
 benchmark/1.8.4
 boost/1.85.0
 cxxopts/3.2.0
+ffmpeg/7.0.1
+magic_enum/0.9.6
 [generators]
 CMakeDeps
 CMakeToolchain

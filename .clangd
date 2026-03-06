@@ -1,0 +1,7 @@
+CompileFlags:
+  CompilationDatabase: build/Debug
+  Add:
+    - -std=c++23
+
+Index:
+  Background: Build
