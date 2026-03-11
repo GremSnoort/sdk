@@ -1,35 +1,30 @@
 set(project inplaced_tests)
 
-PROJECT(${project} VERSION "${CMAKE_PROJECT_VERSION}" LANGUAGES CXX)
-
-file(GLOB ${PROJECT_NAME}_INTERNAL_HEADERS
+file(GLOB ${project}_INTERNAL_HEADERS CONFIGURE_DEPENDS
     ../forward/*.h
     ../forward/*.hpp
 )
 
-file(GLOB ${PROJECT_NAME}_INTERNAL_SOURCES
+file(GLOB ${project}_INTERNAL_SOURCES CONFIGURE_DEPENDS
     ./inplaced.cpp
 )
 
-set(${PROJECT_NAME}_HEADERS
-    ${${PROJECT_NAME}_INTERNAL_HEADERS}
+message(STATUS "TARGET = ${project}")
+
+add_executable(${project}
+    ${${project}_INTERNAL_SOURCES}
+    ${${project}_INTERNAL_HEADERS}
 )
 
-set(${PROJECT_NAME}_SOURCES
-    ${${PROJECT_NAME}_INTERNAL_SOURCES}
+target_include_directories(${project} PRIVATE
+    ${GREMSNOORT_SDK_SOURCE_DIR}
 )
 
-message(STATUS "PROJECT_NAME = ${PROJECT_NAME}")
+gremsnoort_apply_build_options(${project})
 
-add_executable(${PROJECT_NAME}
-    ${${PROJECT_NAME}_SOURCES}
-    ${${PROJECT_NAME}_HEADERS}
-)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
+target_link_libraries(${project} PRIVATE
     Catch2::Catch2WithMain
 )
 
-include(CTest)
 include(Catch)
-catch_discover_tests(${PROJECT_NAME})
+catch_discover_tests(${project})

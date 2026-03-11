@@ -83,9 +83,9 @@ namespace gremsnoort::sdk {
 			return idx < offset;
 		}
 
-		auto at(const std::size_t idx) -> value_type& {
+		auto at(const std::size_t idx) const -> decltype(auto) {
 			assert(check_index(idx));
-			return *(ptr + idx);
+			return *reinterpret_cast<value_type*>(ptr + idx);
 		}
 
 		auto operator[](const std::size_t idx) -> value_type& {
