@@ -4,12 +4,15 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 // gsdk
+#include <gremsnoort/sdk/forward/inplaced.hpp>
 #include <gremsnoort/sdk/ffmpeg/smartptr.h>
 #include <gremsnoort/sdk/logger/logger.h>
 
@@ -20,6 +23,7 @@ extern "C" {
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 #include <libavutil/timestamp.h>
 
 #ifdef __cplusplus
@@ -28,7 +32,7 @@ extern "C" {
 
 namespace gremsnoort::sdk::ffmpeg {
 
-    class muxer_t {
+    class muxer_t final {
     public:
 
         struct options_t {
@@ -40,14 +44,59 @@ namespace gremsnoort::sdk::ffmpeg {
         logger_t::ptr_t logger_;
         options_t options_;
         output_format_uptr out_ctx_{nullptr};
-        AVStream* video_stream_ = nullptr;
-        AVStream* audio_stream_ = nullptr;
-        int64_t last_video_mux_dts_ = AV_NOPTS_VALUE;
-        int64_t last_audio_mux_dts_ = AV_NOPTS_VALUE;
+
+        struct stream_t {
+            AVStream* stream = nullptr;
+            int64_t last_dts = AV_NOPTS_VALUE;
+            std::vector<packet_uptr> pending_packets;
+        };
+        gremsnoort::sdk::inplaced_t<stream_t> muxed_streams_;
+
         stream_context_t stream_ctxs_{};
         bool initialized_ = false;
         bool header_written_ = false;
         bool trailer_written_ = false;
+
+        inline auto index(AVMediaType media_type) const {
+            const auto i = static_cast<std::size_t>(media_type);
+            assert(muxed_streams_.check_index(i));
+            return i;
+        }
+
+        inline auto& get_stream(AVMediaType media_type) {
+            return muxed_streams_.at(index(media_type)).stream;
+        }
+
+        inline auto& get_last_dts(AVMediaType media_type) {
+            return muxed_streams_.at(index(media_type)).last_dts;
+        }
+
+        inline auto has_streams() const {
+            auto check = false;
+            for (std::size_t i = 0; i < muxed_streams_.size(); ++i)
+                check = check || muxed_streams_.at(i).stream;
+            return check;
+        }
+
+        inline auto& pending_packets(AVMediaType media_type) {
+            return muxed_streams_.at(index(media_type)).pending_packets;
+        }
+
+        inline auto pending_packets_count() const {
+            std::size_t n = 0;
+            for (std::size_t i = 0; i < muxed_streams_.size(); ++i) {
+                n += muxed_streams_.at(i).pending_packets.size();
+            }
+            return n;
+        }
+
+        inline auto required_streams_ready() const -> bool {
+            const bool need_video = stream_ctxs_.video != nullptr;
+            const bool need_audio = stream_ctxs_.audio != nullptr;
+            const bool has_video = !need_video || muxed_streams_.at(static_cast<std::size_t>(AVMEDIA_TYPE_VIDEO)).stream != nullptr;
+            const bool has_audio = !need_audio || muxed_streams_.at(static_cast<std::size_t>(AVMEDIA_TYPE_AUDIO)).stream != nullptr;
+            return has_video && has_audio;
+        }
 
         static auto format_from_extension(const std::string& filename) -> const char* {
             const auto dot = filename.find_last_of('.');
@@ -95,7 +144,7 @@ namespace gremsnoort::sdk::ffmpeg {
                 return false;
             }
 
-            auto*& selected_stream = (media_type == AVMEDIA_TYPE_VIDEO) ? video_stream_ : audio_stream_;
+            auto& selected_stream = get_stream(media_type);
             if (selected_stream) {
                 logger_->log<logger_t::level_e::warn, "[{}:{}:{}] {} stream already added">(
                     __FILE__, __LINE__, __func__,
@@ -103,7 +152,7 @@ namespace gremsnoort::sdk::ffmpeg {
                 return true;
             }
 
-            auto* stream = avformat_new_stream(out_ctx_.get(), nullptr);
+            auto stream = avformat_new_stream(out_ctx_.get(), nullptr);
             if (!stream) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED avformat_new_stream !!!">(
                     __FILE__, __LINE__, __func__);
@@ -113,6 +162,19 @@ namespace gremsnoort::sdk::ffmpeg {
             if (const auto ret = avcodec_parameters_from_context(stream->codecpar, enc_ctx); ret < 0) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED avcodec_parameters_from_context: {} !!!">(
                     __FILE__, __LINE__, __func__, ret);
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer context is invalidated to avoid partially added stream state !!!">(
+                    __FILE__, __LINE__, __func__);
+
+                for (std::size_t i = 0; i < muxed_streams_.size(); ++i) {
+                    auto& state = muxed_streams_.at(i);
+                    state.stream = nullptr;
+                    state.last_dts = AV_NOPTS_VALUE;
+                    state.pending_packets.clear();
+                }
+                out_ctx_.reset();
+                header_written_ = false;
+                initialized_ = false;
+                trailer_written_ = false;
                 return false;
             }
 
@@ -125,37 +187,7 @@ namespace gremsnoort::sdk::ffmpeg {
             return true;
         }
 
-        auto initialize_if_needed(const AVPacket* first_packet) -> bool {
-            if (initialized_)
-                return true;
-            if (!out_ctx_) {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer context is not initialized !!!">(
-                    __FILE__, __LINE__, __func__);
-                return false;
-            }
-            if (!stream_ctxs_) {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! stream context is not configured for lazy muxer init !!!">(
-                    __FILE__, __LINE__, __func__);
-                return false;
-            }
-
-            // first_packet is intentionally accepted as input to keep lazy-init anchored to the first real packet.
-            [[maybe_unused]] const auto* first = first_packet;
-
-            if (stream_ctxs_.video) {
-                if (!add_video_stream_from_encoder(stream_ctxs_.video))
-                    return false;
-            }
-            if (stream_ctxs_.audio) {
-                if (!add_audio_stream_from_encoder(stream_ctxs_.audio))
-                    return false;
-            }
-
-            initialized_ = write_header();
-            return initialized_;
-        }
-
-        auto write_packet_for(packet_uptr packet, AVMediaType media_type) -> bool {
+        auto write_packet_prepared(packet_uptr packet, AVMediaType media_type) -> bool {
             if (!out_ctx_) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer context is not initialized !!!">(
                     __FILE__, __LINE__, __func__);
@@ -163,13 +195,11 @@ namespace gremsnoort::sdk::ffmpeg {
             }
             if (!packet)
                 return true;
-            if (!initialize_if_needed(packet.get()))
-                return false;
             if (!header_written_)
                 return false;
 
-            auto* stream = (media_type == AVMEDIA_TYPE_VIDEO) ? video_stream_ : audio_stream_;
-            auto& last_mux_dts = (media_type == AVMEDIA_TYPE_VIDEO) ? last_video_mux_dts_ : last_audio_mux_dts_;
+            auto& stream = get_stream(media_type);
+            auto& last_mux_dts = get_last_dts(media_type);
             if (!stream) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! target stream for type {} is not initialized !!!">(
                     __FILE__, __LINE__, __func__, static_cast<int>(media_type));
@@ -252,6 +282,76 @@ namespace gremsnoort::sdk::ffmpeg {
             return true;
         }
 
+        auto flush_pending_packets() -> bool {
+
+            for (std::size_t i = 0; i < muxed_streams_.size(); ++i) {
+                const auto media_type = static_cast<AVMediaType>(i);
+                auto& stream = muxed_streams_.at(i);
+                for (auto& packet : stream.pending_packets) {
+                    if (packet && !write_packet_prepared(std::move(packet), media_type))
+                        return false;
+                }
+                stream.pending_packets.clear();
+            }
+            return true;
+        }
+
+        auto initialize_if_needed(AVMediaType media_type, const AVPacket* first_packet) -> bool {
+            if (!out_ctx_) {
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer context is not initialized !!!">(
+                    __FILE__, __LINE__, __func__);
+                return false;
+            }
+            if (!stream_ctxs_) {
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! stream context is not configured for lazy muxer init !!!">(
+                    __FILE__, __LINE__, __func__);
+                return false;
+            }
+
+            // first_packet is intentionally accepted as input to keep lazy-init anchored to the first real packet.
+            [[maybe_unused]] const auto first = first_packet;
+            const auto need_video = (media_type == AVMEDIA_TYPE_VIDEO);
+            const auto need_audio = (media_type == AVMEDIA_TYPE_AUDIO);
+            auto& requested_stream = get_stream(media_type);
+
+            // FFmpeg contract: new output streams must be created before avformat_write_header().
+            if (header_written_ && !requested_stream) {
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! cannot add new stream type {} after avformat_write_header() !!!">(
+                    __FILE__, __LINE__, __func__, static_cast<int>(media_type));
+                return false;
+            }
+
+            if (need_video && !get_stream(media_type)) {
+                if (!stream_ctxs_.video) {
+                    logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! video stream context is not configured for lazy muxer init !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
+                if (!add_video_stream_from_encoder(stream_ctxs_.video))
+                    return false;
+            }
+
+            if (need_audio && !get_stream(media_type)) {
+                if (!stream_ctxs_.audio) {
+                    logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! audio stream context is not configured for lazy muxer init !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
+                if (!add_audio_stream_from_encoder(stream_ctxs_.audio))
+                    return false;
+            }
+
+            if (!header_written_ && required_streams_ready()) {
+                if (!write_header())
+                    return false;
+                initialized_ = true;
+                if (!flush_pending_packets())
+                    return false;
+            }
+
+            return true;
+        }
+
         auto add_video_stream_from_encoder(const AVCodecContext* enc_ctx) -> bool {
             return add_stream_from_encoder(enc_ctx, AVMEDIA_TYPE_VIDEO);
         }
@@ -268,7 +368,7 @@ namespace gremsnoort::sdk::ffmpeg {
             }
             if (header_written_)
                 return true;
-            if (!video_stream_ && !audio_stream_) {
+            if (!has_streams()) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! write_header called before adding any stream !!!">(
                     __FILE__, __LINE__, __func__);
                 return false;
@@ -298,8 +398,21 @@ namespace gremsnoort::sdk::ffmpeg {
                     __FILE__, __LINE__, __func__);
                 return false;
             }
-            if (!header_written_)
+            if (!header_written_) {
+                const auto pending = pending_packets_count();
+                const bool needs_streams = stream_ctxs_.video || stream_ctxs_.audio;
+                if (pending > 0 || needs_streams) {
+                    logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! finalize failed: header is not written (pending_packets={}, needs_video={}, needs_audio={}, has_video_stream={}, has_audio_stream={}) !!!">(
+                        __FILE__, __LINE__, __func__,
+                        pending,
+                        static_cast<int>(stream_ctxs_.video != nullptr),
+                        static_cast<int>(stream_ctxs_.audio != nullptr),
+                        static_cast<int>(get_stream(AVMEDIA_TYPE_VIDEO) != nullptr),
+                        static_cast<int>(get_stream(AVMEDIA_TYPE_AUDIO) != nullptr));
+                    return false;
+                }
                 return true;
+            }
             if (trailer_written_)
                 return true;
 
@@ -313,11 +426,14 @@ namespace gremsnoort::sdk::ffmpeg {
             return true;
         }
 
+        static inline constexpr auto streams_count = static_cast<std::size_t>(AVMEDIA_TYPE_NB);
+
     public:
 
         explicit muxer_t(const options_t& options, logger_t::ptr_t logger)
             : logger_(logger->clone())
-            , options_(options) {
+            , options_(options)
+            , muxed_streams_(streams_count) {
 
             if (options_.output_filename.empty()) {
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! output_filename is empty !!!">(
@@ -337,6 +453,14 @@ namespace gremsnoort::sdk::ffmpeg {
                 return;
             }
 
+            std::size_t index_out = 0;
+            while (index_out < streams_count) {
+
+                if (!muxed_streams_.add(index_out, stream_t{ .stream = nullptr, .last_dts = AV_NOPTS_VALUE, .pending_packets = {} }))
+                    break;
+            }
+            assert(muxed_streams_.size() == streams_count);
+
             out_ctx_.reset(ptr);
         }
 
@@ -348,7 +472,10 @@ namespace gremsnoort::sdk::ffmpeg {
             if (!out_ctx_)
                 return;
 
-            write_trailer();
+            if (!write_trailer()) {
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer finalize failed in destructor !!!">(
+                    __FILE__, __LINE__, __func__);
+            }
 
             if (!(out_ctx_->oformat->flags & AVFMT_NOFILE) && out_ctx_->pb) {
                 avio_closep(&out_ctx_->pb);
@@ -359,48 +486,40 @@ namespace gremsnoort::sdk::ffmpeg {
             return out_ctx_.get() != nullptr;
         }
 
-        auto write_video_packet(packet_uptr packet) -> bool {
-            return write_packet_for(std::move(packet), AVMEDIA_TYPE_VIDEO);
-        }
+        auto write_packet_for(packet_uptr packet, AVMediaType media_type) -> bool {
+            if (!out_ctx_) {
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer context is not initialized !!!">(
+                    __FILE__, __LINE__, __func__);
+                return false;
+            }
+            if (!packet)
+                return true;
+            if (!initialize_if_needed(media_type, packet.get()))
+                return false;
+            if (!header_written_) {
+                pending_packets(media_type).emplace_back(std::move(packet));
+                return true;
+            }
 
-        auto write_audio_packet(packet_uptr packet) -> bool {
-            return write_packet_for(std::move(packet), AVMEDIA_TYPE_AUDIO);
+            return write_packet_prepared(std::move(packet), media_type);
         }
     };
 
-    auto consume_video(muxer_t& muxer, logger_t::ptr_t logger) {
-        return [&muxer, logger = std::move(logger)](auto&& packets) {
+    auto consume(muxer_t& muxer, const enum AVMediaType media_type, logger_t::ptr_t logger) {
+        return [&muxer, media_type = std::move(media_type), logger = std::move(logger)](auto&& packets) {
             std::size_t n = 0;
             while (packets) {
                 auto p = packets();
                 if (!p) continue;
                 ++n;
 
-                if (!muxer.write_video_packet(std::move(p))) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! failed to mux video packet !!!">(
+                if (!muxer.write_packet_for(std::move(p), media_type)) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! failed to mux packet !!!">(
                                 __FILE__, __LINE__, __func__);
                     return;
                 }
             }
-            std::printf("muxed video packets: %zu\n", n);
-        };
-    }
-
-    auto consume_audio(muxer_t& muxer, logger_t::ptr_t logger) {
-        return [&muxer, logger = std::move(logger)](auto&& packets) {
-            std::size_t n = 0;
-            while (packets) {
-                auto p = packets();
-                if (!p) continue;
-                ++n;
-
-                if (!muxer.write_audio_packet(std::move(p))) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! failed to mux audio packet !!!">(
-                                __FILE__, __LINE__, __func__);
-                    return;
-                }
-            }
-            std::printf("muxed audio packets: %zu\n", n);
+            std::printf("muxed packets: %zu\n", n);
         };
     }
 

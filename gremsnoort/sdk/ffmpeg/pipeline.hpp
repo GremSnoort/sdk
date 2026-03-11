@@ -1,12 +1,16 @@
 #pragma once
 
 // std
-#include <cstddef>
+#include <cassert>
+#include <concepts>
 #include <cstdio>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 // gsdk
+#include <gremsnoort/sdk/forward/coro.hpp>
+#include <gremsnoort/sdk/ffmpeg/smartptr.h>
 #include <gremsnoort/sdk/ffmpeg/demuxer.hpp>
 #include <gremsnoort/sdk/ffmpeg/decoder.hpp>
 #include <gremsnoort/sdk/ffmpeg/encoder.hpp>
@@ -23,23 +27,17 @@ namespace gremsnoort::sdk::ffmpeg {
     template<class T>
     concept sink_type = requires(const T& v, AVPacket* p) {
         { v.is_mine(p) } -> std::same_as<bool>;
-        { v(packet_uptr{}) } -> std::same_as<void>;
+        { v.operator()(packet_uptr{}) } -> std::same_as<void>;
     };
 
-    template<class LeftSink, class RightSink>
-    requires sink_type<LeftSink> && sink_type<RightSink>
-    auto tee(LeftSink&& left_sink, RightSink&& right_sink) {
-        return [left = std::forward<LeftSink>(left_sink), right = std::forward<RightSink>(right_sink)](auto packets) mutable {
+    template<class... Sinks>
+    requires (sink_type<std::remove_reference_t<Sinks>> &&...)
+    auto tee(Sinks&&... sinks) {
+        return [...ss = std::forward<Sinks>(sinks)](auto packets) mutable {
             while (packets) {
-                auto packet = packets();
-                if (!packet)
-                    continue;
-
-                if (left.is_mine(packet.get())) {
-                    left(std::move(packet));
-                }
-                else if (right.is_mine(packet.get())) {
-                    right(std::move(packet));
+                if (auto packet = packets(); packet) {
+                    const auto routed = ((ss.is_mine(packet.get()) ? (ss(std::move(packet)), true) : false) || ...);
+                    (void)routed;
                 }
             }
         };
@@ -66,113 +64,186 @@ namespace gremsnoort::sdk::ffmpeg {
         logger_t::ptr_t logger;
         demuxer_t demuxer;
 
-        std::unique_ptr<decoder_t> decoder_video = nullptr;
-        std::unique_ptr<encoder_t> encoder_video = nullptr;
-        std::unique_ptr<decoder_t> decoder_audio = nullptr;
-        std::unique_ptr<encoder_t> encoder_audio = nullptr;
+        struct stream_t final {
+
+            std::unique_ptr<decoder_t> decoder = nullptr;
+            std::unique_ptr<encoder_t> encoder = nullptr;
+
+            explicit stream_t(const auto& ref, const AVCodecID codec_id, logger_t::ptr_t logger)
+                : decoder(ref ? std::make_unique<decoder_t>(ref, logger) : nullptr)
+                , encoder(ref ? std::make_unique<encoder_t>(ref, codec_id, logger) : nullptr)
+            {
+                if (ref && !(*decoder)) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize decoder !!!">(
+                        __FILE__, __LINE__, __func__);
+                }
+                if (ref && !(*encoder)) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize encoder (codec_id={}) !!!">(
+                        __FILE__, __LINE__, __func__, static_cast<int>(codec_id));
+                }
+            }
+
+            ~stream_t() = default;
+
+            operator bool() const noexcept {
+                return decoder && *decoder && encoder && *encoder;
+            }
+
+            inline auto context() const {
+                return encoder ? encoder->context() : nullptr;
+            }
+
+            inline auto check_encoder_alive() const -> bool {
+                return encoder && *encoder && encoder->context() && !encoder->failed();
+            }
+        };
+
+        stream_t video;
+        stream_t audio;
 
         muxer_t muxer;
 
-        class sink_t {
-        protected:
+        bool ready_ = false;
+        bool valid_ = true;
+
+        class sink_t final {
+
             enum AVMediaType media_type;
             demuxer_t& demuxer;
-            decoder_t& decoder;
-            encoder_t& encoder;
+            stream_t& stream;
             muxer_t& muxer;
             logger_t::ptr_t logger;
+            bool& valid;
+
+            inline auto stream_alive() const {
+                return (bool)stream;
+            }
 
         public:
-            virtual ~sink_t() = default;
+
+            ~sink_t() = default;
 
             inline auto is_mine(AVPacket* p) const {
                 assert(p);
-                return demuxer.packet_type(p) == media_type;
+                return stream_alive() && p && demuxer.packet_type(p) == media_type;
             }
 
-            virtual auto operator()(packet_uptr packet) const -> void = 0;
+            auto operator()(packet_uptr packet) const -> void {
+
+                if (stream_alive() && packet) {
+
+                    if (valid = stream.check_encoder_alive(); valid) {
+
+                        if (stream)
+                            consume(muxer, media_type, logger)(
+                                single_packet(std::move(packet))
+                                | decode_with(*stream.decoder)
+                                | encode_with(*stream.encoder)
+                            );
+
+                        if (valid = stream.check_encoder_alive(); valid)
+                            valid = check_muxer_alive();
+                    }
+                }
+            }
+
+            auto operator()(auto packets) const -> void {
+
+                if (!stream_alive())
+                    return;
+
+                while (packets && valid) {
+                    if (auto packet = packets(); packet && is_mine(packet.get()))
+                        operator()(std::move(packet));
+                }
+            }
+
+            auto check_muxer_alive() const -> bool {
+                if (!muxer) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! muxer became invalid (type={}) !!!">(
+                        __FILE__, __LINE__, __func__, static_cast<int>(media_type));
+                    return false;
+                }
+                return true;
+            }
 
             explicit sink_t(
                 enum AVMediaType media_type_,
                 demuxer_t& demuxer_,
-                decoder_t& decoder_,
-                encoder_t& encoder_,
+                stream_t& stream_,
                 muxer_t& muxer_,
-                logger_t::ptr_t logger_)
+                logger_t::ptr_t logger_,
+                bool& valid_)
                 : media_type(media_type_)
                 , demuxer(demuxer_)
-                , decoder(decoder_)
-                , encoder(encoder_)
+                , stream(stream_)
                 , muxer(muxer_)
                 , logger(logger_)
+                , valid(valid_)
             {}
         };
 
-        class video_sink_t final : public sink_t {
-        public:
-            virtual auto operator()(packet_uptr packet) const -> void final {
-                if (!packet)
-                    return;
+        auto run_pipeline() -> bool {
+            if (!ready_) {
+                logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline is not ready to run !!!">(
+                    __FILE__, __LINE__, __func__);
+                return false;
+            }
 
-                consume_video(muxer, logger)(
-                    single_packet(std::move(packet))
-                    | decode_with(decoder)
-                    | encode_with(encoder)
+            if (video && audio) {
+                demuxer.retrieve() | tee(
+                    sink_t(AVMEDIA_TYPE_VIDEO, demuxer, video, muxer, logger, valid_),
+                    sink_t(AVMEDIA_TYPE_AUDIO, demuxer, audio, muxer, logger, valid_)
                 );
+
+            } else if (video) {
+                demuxer.retrieve() | sink_t(AVMEDIA_TYPE_VIDEO, demuxer, video, muxer, logger, valid_);
+
+            } else if (audio) {
+                demuxer.retrieve() | sink_t(AVMEDIA_TYPE_AUDIO, demuxer, audio, muxer, logger, valid_);
+
+            } else {
+                logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline has no active audio/video branches !!!">(
+                    __FILE__, __LINE__, __func__);
+                return false;
             }
 
-            explicit video_sink_t(
-                demuxer_t& demuxer,
-                decoder_t& decoder,
-                encoder_t& encoder,
-                muxer_t& muxer,
-                logger_t::ptr_t logger)
-                : sink_t(AVMEDIA_TYPE_VIDEO, demuxer, decoder, encoder, muxer, logger)
-            {}
-        };
+            if (!valid_)
+                return false;
 
-        class audio_sink_t final : public sink_t {
-        public:
-            virtual auto operator()(packet_uptr packet) const -> void final {
-                if (!packet)
-                    return;
+            if (video) {
 
-                consume_audio(muxer, logger)(
-                    single_packet(std::move(packet))
-                    | decode_with(decoder)
-                    | encode_with(encoder)
-                );
+                consume(muxer, AVMEDIA_TYPE_VIDEO, logger)(flush_decoder(*video.decoder) | encode_with(*video.encoder));
+                if (!video.check_encoder_alive()) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! video encoder failed on decoder-flush stage !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
+                consume(muxer, AVMEDIA_TYPE_VIDEO, logger)(flush_encoder(*video.encoder));
+                if (!video.check_encoder_alive()) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! video encoder failed on encoder-flush stage !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
             }
 
-            explicit audio_sink_t(
-                demuxer_t& demuxer,
-                decoder_t& decoder,
-                encoder_t& encoder,
-                muxer_t& muxer,
-                logger_t::ptr_t logger)
-                : sink_t(AVMEDIA_TYPE_AUDIO, demuxer, decoder, encoder, muxer, logger)
-            {}
-        };
+            if (audio) {
 
-        auto run_pipeline() {
-
-            demuxer.retrieve() | tee(
-                video_sink_t(demuxer, *decoder_video, *encoder_video, muxer, logger),
-                audio_sink_t(demuxer, *decoder_audio, *encoder_audio, muxer, logger)
-            );
-
-            if (decoder_video && encoder_video) {
-                // lifetime bug repro:
-                // coroutine возобновилась после того, как объект, чьи данные она использует (stage closure/его captures), уже мертв;
-                // auto gen = flush_decoder(*decoder_video) | encode_with(*encoder_video); + std::move(gen)
-                consume_video(muxer, logger)(flush_decoder(*decoder_video) | encode_with(*encoder_video));
-                consume_video(muxer, logger)(flush_encoder(*encoder_video));
+                consume(muxer, AVMEDIA_TYPE_AUDIO, logger)(flush_decoder(*audio.decoder) | encode_with(*audio.encoder));
+                if (!audio.check_encoder_alive()) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! audio encoder failed on decoder-flush stage !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
+                consume(muxer, AVMEDIA_TYPE_AUDIO, logger)(flush_encoder(*audio.encoder));
+                if (!audio.check_encoder_alive()) {
+                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! audio encoder failed on encoder-flush stage !!!">(
+                        __FILE__, __LINE__, __func__);
+                    return false;
+                }
             }
 
-            if (decoder_audio && encoder_audio) {
-                consume_audio(muxer, logger)(flush_decoder(*decoder_audio) | encode_with(*encoder_audio));
-                consume_audio(muxer, logger)(flush_encoder(*encoder_audio));
-            }
+            return true;
         }
 
     public:
@@ -180,10 +251,8 @@ namespace gremsnoort::sdk::ffmpeg {
         explicit pipeline_t(const options_t& options, logger_t::ptr_t logger_)
             : logger(logger_->clone())
             , demuxer(options.source, logger)
-            , decoder_video(nullptr)
-            , encoder_video(nullptr)
-            , decoder_audio(nullptr)
-            , encoder_audio(nullptr)
+            , video(demuxer.video_reference(), options.video_codec_id, logger)
+            , audio(demuxer.audio_reference(), options.audio_codec_id, logger)
             , muxer(muxer_t::options_t{ .output_filename = options.destination }, logger)
         {
             if (!demuxer) {
@@ -197,50 +266,20 @@ namespace gremsnoort::sdk::ffmpeg {
                 return;
             }
 
-            if (demuxer.video_reference()) {
-                decoder_video = std::make_unique<decoder_t>(demuxer.video_reference(), logger);
-                if (!(*decoder_video)) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize video decoder from source `{}` !!!">(
-                        __FILE__, __LINE__, __func__, options.source);
-                    return;
-                }
-
-                encoder_video = std::make_unique<encoder_t>(demuxer.video_reference(), options.video_codec_id, logger);
-                if (!(*encoder_video)) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize video encoder (codec_id={}) !!!">(
-                        __FILE__, __LINE__, __func__, static_cast<int>(options.video_codec_id));
-                    return;
-                }
+            if (auto sc = stream_context_t{
+                    .video = video.context(),
+                    .audio = audio.context(),
+                }; sc) {
+                muxer.set_stream_context(sc);
+                ready_ = true;
             }
-
-            if (demuxer.audio_reference()) {
-                decoder_audio = std::make_unique<decoder_t>(demuxer.audio_reference(), logger);
-                if (!(*decoder_audio)) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize audio decoder from source `{}` !!!">(
-                        __FILE__, __LINE__, __func__, options.source);
-                    return;
-                }
-
-                encoder_audio = std::make_unique<encoder_t>(demuxer.audio_reference(), options.audio_codec_id, logger);
-                if (!(*encoder_audio)) {
-                    logger->log<logger_t::level_e::critical, "[{}:{}:{}] !!! pipeline: failed to initialize audio encoder (codec_id={}) !!!">(
-                        __FILE__, __LINE__, __func__, static_cast<int>(options.audio_codec_id));
-                    return;
-                }
-            }
-
-            auto sc = stream_context_t{
-                .video = encoder_video ? encoder_video->context() : nullptr,
-                .audio = encoder_audio ? encoder_audio->context() : nullptr
-            };
-            muxer.set_stream_context(sc);
         }
-        
 
         static auto run(const options_t& options, logger_t::ptr_t logger) {
             do {
-                pipeline_t(options, logger).run_pipeline();
-            } while(options.need_restart);
+                if (!pipeline_t(options, logger).run_pipeline())
+                    break;
+            } while (options.need_restart);
         }
     };
 

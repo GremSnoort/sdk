@@ -33,16 +33,19 @@ namespace gremsnoort::sdk::ffmpeg {
         const AVCodec* codec_;
         codec_ctx_uptr enc_ctx_;
         bool opened_ = false;
+        bool failed_ = false;
         AVRational source_framerate_ = AVRational{ .num = 0, .den = 1 };
         AVMediaType media_type_ = AVMEDIA_TYPE_UNKNOWN;
 
         auto init_from_reference(const reference_t& ref) {
             if (!codec_ || !enc_ctx_) {
+                failed_ = true;
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED to INIT encoder context !!!">(
                     __FILE__, __LINE__, __func__);
                 return;
             }
             if (!ref || !ref.codecpar) {
+                failed_ = true;
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED to init from NULL reference !!!">(
                     __FILE__, __LINE__, __func__);
                 enc_ctx_.reset();
@@ -91,6 +94,7 @@ namespace gremsnoort::sdk::ffmpeg {
             // fftools: video encoder framerate is initialized from explicit frame metadata.
             if (media_type_ == AVMEDIA_TYPE_VIDEO) {
                 if (frame->format == AV_PIX_FMT_NONE || frame->width <= 0 || frame->height <= 0) {
+                    failed_ = true;
                     logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! invalid input video frame params for encoder open: fmt={} w={} h={} !!!">(
                         __FILE__, __LINE__, __func__, frame->format, frame->width, frame->height);
                     return false;
@@ -123,6 +127,7 @@ namespace gremsnoort::sdk::ffmpeg {
                 }
             } else if (media_type_ == AVMEDIA_TYPE_AUDIO) {
                 if (frame->format == AV_SAMPLE_FMT_NONE || frame->sample_rate <= 0 || frame->ch_layout.nb_channels <= 0) {
+                    failed_ = true;
                     logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! invalid input audio frame params for encoder open: fmt={} sample_rate={} channels={} !!!">(
                         __FILE__, __LINE__, __func__, frame->format, frame->sample_rate, frame->ch_layout.nb_channels);
                     return false;
@@ -135,6 +140,7 @@ namespace gremsnoort::sdk::ffmpeg {
                 }
                 av_channel_layout_uninit(&enc_ctx_->ch_layout);
                 if (auto ret = av_channel_layout_copy(&enc_ctx_->ch_layout, &frame->ch_layout); ret < 0) {
+                    failed_ = true;
                     logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! failed to copy input audio channel layout: {} !!!">(
                         __FILE__, __LINE__, __func__, ret);
                     return false;
@@ -142,6 +148,7 @@ namespace gremsnoort::sdk::ffmpeg {
             }
 
             if (auto ret = avcodec_open2(enc_ctx_.get(), codec_, nullptr); ret < 0) {
+                failed_ = true;
                 logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED avcodec_open2: {} !!!">(
                     __FILE__, __LINE__, __func__, ret);
                 enc_ctx_.reset();
@@ -202,19 +209,32 @@ namespace gremsnoort::sdk::ffmpeg {
             return enc_ctx_.get();
         }
 
+        auto failed() const noexcept -> bool {
+            return failed_;
+        }
+
         coro::produce::generator_t<packet_uptr>
         encode(frame_uptr frame) {
 
-            assert(enc_ctx_);
+            if (!enc_ctx_) {
+                failed_ = true;
+                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! encoder context is not initialized !!!">(
+                    __FILE__, __LINE__, __func__);
+                co_return;
+            }
             if (!frame && !opened_) {
                 logger_->log<logger_t::level_e::trace, "[{}:{}:{}] flush requested before first frame; nothing to flush">(
                     __FILE__, __LINE__, __func__);
                 co_return;
             }
-            if (!open_if_needed(frame.get()))
+            if (!open_if_needed(frame.get())) {
+                if (frame)
+                    failed_ = true;
                 co_return;
+            }
 
             if (frame && opened_ && !frame_compatible_with_opened_encoder(frame.get())) {
+                failed_ = true;
                 if (media_type_ == AVMEDIA_TYPE_VIDEO) {
                     logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! input video frame params changed after encoder open: "
                                     "frame(w={},h={},fmt={}) != enc(w={},h={},fmt={}) !!!">(
@@ -234,58 +254,65 @@ namespace gremsnoort::sdk::ffmpeg {
                 co_return;
             }
 
-            auto ret = avcodec_send_frame(enc_ctx_.get(), frame.get());
-
-            switch(ret) {
-            case AVERROR(EAGAIN): {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! EAGAIN on avcodec_send_frame: "
-                                "input is not accepted in the current state - user must read output with avcodec_receive_packet() "
-                                "(once all output is read, the packet should be resent, and the call will not fail with EAGAIN) !!!">(
-                    __FILE__, __LINE__, __func__);
-
-                co_return;
-            }
-            case AVERROR(EINVAL): {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! EINVAL on avcodec_send_frame: "
-                                "codec not opened, it is a decoder, or requires flush !!!">(
-                    __FILE__, __LINE__, __func__);
-
-                co_return;
-            }
-            case AVERROR(ENOMEM): {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! ENOMEM on avcodec_send_frame: "
-                                "failed to add packet to internal queue, or similar !!!">(
-                    __FILE__, __LINE__, __func__);
-
-                co_return;
-            }
-            case AVERROR_EOF: {
-                if (!frame) {
-                    logger_->log<logger_t::level_e::trace, "[{}:{}:{}] AVERROR_EOF on avcodec_send_frame during flush: "
-                                    "encoder is already fully flushed">(
-                        __FILE__, __LINE__, __func__);
-                } else {
-                    logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! AVERROR_EOF on avcodec_send_frame: "
-                                    "the encoder has been flushed, and no new frames can be sent to it !!!">(
-                        __FILE__, __LINE__, __func__);
-                }
-
-                co_return;
-            }
-            default:
-                break;
-            }
-
-            if (ret < 0) {
-                logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED to avcodec_send_frame: {} !!!">(
-                    __FILE__, __LINE__, __func__, ret);
-
-                co_return;
-            }
-
-            assert(ret == 0);
+            auto ret = int{AVERROR(EAGAIN)};
+            auto frame_sent = false;
 
             while(true) {
+                if (!frame_sent) {
+                    ret = avcodec_send_frame(enc_ctx_.get(), frame.get());
+
+                    switch(ret) {
+                    case AVERROR(EAGAIN): {
+                        logger_->log<logger_t::level_e::trace, "[{}:{}:{}] EAGAIN on avcodec_send_frame: "
+                                        "draining encoder output before retrying the same frame">(
+                            __FILE__, __LINE__, __func__);
+                        break;
+                    }
+                    case AVERROR(EINVAL): {
+                        failed_ = true;
+                        logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! EINVAL on avcodec_send_frame: "
+                                        "codec not opened, it is a decoder, or requires flush !!!">(
+                            __FILE__, __LINE__, __func__);
+
+                        co_return;
+                    }
+                    case AVERROR(ENOMEM): {
+                        failed_ = true;
+                        logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! ENOMEM on avcodec_send_frame: "
+                                        "failed to add packet to internal queue, or similar !!!">(
+                            __FILE__, __LINE__, __func__);
+
+                        co_return;
+                    }
+                    case AVERROR_EOF: {
+                        if (!frame) {
+                            logger_->log<logger_t::level_e::trace, "[{}:{}:{}] AVERROR_EOF on avcodec_send_frame during flush: "
+                                            "encoder is already fully flushed">(
+                                __FILE__, __LINE__, __func__);
+                        } else {
+                            failed_ = true;
+                            logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! AVERROR_EOF on avcodec_send_frame: "
+                                            "the encoder has been flushed, and no new frames can be sent to it !!!">(
+                                __FILE__, __LINE__, __func__);
+                        }
+
+                        co_return;
+                    }
+                    default:
+                        break;
+                    }
+
+                    if (ret < 0 && ret != AVERROR(EAGAIN)) {
+                        failed_ = true;
+                        logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED to avcodec_send_frame: {} !!!">(
+                            __FILE__, __LINE__, __func__, ret);
+
+                        co_return;
+                    }
+
+                    if (ret == 0)
+                        frame_sent = true;
+                }
 
                 if (auto packet = make_packet(); packet) {
 
@@ -297,9 +324,12 @@ namespace gremsnoort::sdk::ffmpeg {
                                         "output is not available in this state - user must try to send new input">(
                             __FILE__, __LINE__, __func__);
 
-                        co_return;
+                        if (frame_sent)
+                            co_return;
+                        continue;
                     }
                     case AVERROR(EINVAL): {
+                        failed_ = true;
                         logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! EINVAL on avcodec_receive_packet: "
                                         "codec not opened, or it is a decoder !!!">(
                             __FILE__, __LINE__, __func__);
@@ -318,6 +348,7 @@ namespace gremsnoort::sdk::ffmpeg {
                     }
 
                     if (ret < 0) {
+                        failed_ = true;
                         logger_->log<logger_t::level_e::critical, "[{}:{}:{}] !!! FAILED to avcodec_receive_packet: {} !!!">(
                             __FILE__, __LINE__, __func__, ret);
 
